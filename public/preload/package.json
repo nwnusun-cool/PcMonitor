@@ -1,0 +1,7 @@
+{
+  "name": "preload",
+  "type": "commonjs",
+  "dependencies": {
+    "systeminformation": "^5.22.0"
+  }
+}
