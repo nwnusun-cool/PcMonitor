@@ -48,6 +48,12 @@ window.services = {
     return `${Math.floor(s / 86400)}天 ${Math.floor((s % 86400) / 3600)}小时 ${Math.floor((s % 3600) / 60)}分钟`
   },
 
+  // 系统统计 (进程数/线程数/句柄数)
+  getSystemStats() {
+    if (native) return native.getSystemStats()
+    return { processCount: 0, threadCount: 0, handleCount: 0 }
+  },
+
   // 系统信息 (缓存)
   async getSystemInfo() {
     if (cache.systemInfo) return cache.systemInfo
@@ -75,6 +81,12 @@ window.services = {
   async getDiskInfo() {
     if (native) return native.getDiskInfo()
     return { partitions: [], totalSize: '0 B', totalUsed: '0 B', totalAvailable: '0 B', totalPercent: '0%' }
+  },
+
+  // 磁盘 IO
+  getDiskIO() {
+    if (native) return native.getDiskIO()
+    return { readSec: 0, writeSec: 0, readSecFmt: '0 B/s', writeSecFmt: '0 B/s' }
   },
 
   // 网络信息
@@ -113,8 +125,13 @@ window.services = {
   async getProcessInfo() {
     if (native) {
       const p = native.getProcessList()
-      return { all: p.count, running: p.count, blocked: 0, sleeping: 0, topCpu: p.topMem, topMem: p.topMem }
+      return { 
+        all: p.count, 
+        list: p.list,
+        topCpu: p.topCpu, 
+        topMem: p.topMem 
+      }
     }
-    return { all: 0, running: 0, blocked: 0, sleeping: 0, topCpu: [], topMem: [] }
+    return { all: 0, list: [], topCpu: [], topMem: [] }
   }
 }

@@ -98,26 +98,40 @@ PcMonitor/
 
 - **前端框架**: Vue 3 + Composition API
 - **构建工具**: Vite 6
-- **系统信息**: [systeminformation](https://github.com/sebhildebrandt/systeminformation)
+- **系统信息**: C++ 原生模块 (Windows API + PDH)
 - **运行平台**: uTools
 
 ## 📝 开发说明
+
+### 原生模块
+
+项目使用 C++ 原生 Node.js 模块获取系统信息，相比 JavaScript 库性能更高、数据更准确。
+
+**编译原生模块：**
+```bash
+cd public/preload/native
+npm install
+npm run build
+```
 
 ### Preload 服务
 
 `public/preload/services.js` 提供了以下系统信息获取方法：
 
-| 方法 | 说明 |
-|------|------|
-| `getSystemInfo()` | 获取操作系统、主机信息 |
-| `getCpuInfo()` | 获取 CPU 详细信息 |
-| `getMemoryInfo()` | 获取内存使用情况 |
-| `getDiskInfo()` | 获取磁盘分区信息 |
-| `getNetworkInfo()` | 获取网络接口和流量 |
-| `getGpuInfo()` | 获取显卡和显示器信息 |
-| `getBatteryInfo()` | 获取电池状态 |
-| `getProcessInfo()` | 获取进程列表 |
-| `getUptime()` | 获取系统运行时间 |
+| 方法 | 说明 | 数据来源 |
+|------|------|----------|
+| `getSystemInfo()` | 操作系统、主机信息 | systeminformation |
+| `getCpuInfo()` | CPU 详细信息 | C++ 原生模块 |
+| `getCpuLoad()` | CPU 实时使用率 | C++ PDH API |
+| `getMemoryInfo()` | 内存使用情况 | C++ 原生模块 |
+| `getDiskInfo()` | 磁盘分区信息 | systeminformation |
+| `getDiskIO()` | 磁盘读写速率 | C++ PDH API |
+| `getNetworkInfo()` | 网络接口和流量 | systeminformation |
+| `getGpuInfo()` | 显卡和显示器信息 | systeminformation |
+| `getBatteryInfo()` | 电池状态 | systeminformation |
+| `getProcessInfo()` | 进程列表 | C++ 原生模块 |
+| `getSystemStats()` | 进程/线程/句柄数 | C++ PDH API |
+| `getUptime()` | 系统运行时间 | C++ 原生模块 |
 
 ### 数据刷新
 

@@ -22,17 +22,21 @@ const diskInfo = ref({
   totalAvailable: '0 B',
   totalPercent: '0%'
 })
+const diskIO = ref({ readSec: 0, writeSec: 0, readSecFmt: '0 B/s', writeSecFmt: '0 B/s' })
 const networkInfo = ref({ interfaces: [], stats: [] })
 const gpuInfo = ref({ controllers: [], displays: [] })
 const batteryInfo = ref({})
 const processInfo = ref({ topCpu: [], topMem: [], all: 0, running: 0, blocked: 0, sleeping: 0 })
 const uptime = ref('')
+const systemStats = ref({ processCount: 0, threadCount: 0, handleCount: 0 })
 
 // 图表数据
 const cpuHistory = ref([])
 const memoryHistory = ref([])
 const networkDownHistory = ref([])
 const networkUpHistory = ref([])
+const diskReadHistory = ref([])
+const diskWriteHistory = ref([])
 
 // 组件引用
 const cpuPanelRef = ref(null)
@@ -61,6 +65,7 @@ async function loadData() {
     
     // 第一层：快速数据（立即显示）
     uptime.value = window.services.getUptime()
+    systemStats.value = window.services.getSystemStats()
     console.log(`[${Date.now() - t0}ms] uptime done`)
     
     // 兼容：getCpuLoad 可能是同步或异步
@@ -150,6 +155,7 @@ async function refreshDynamic() {
     cpuInfo.value = { ...cpuInfo.value, ...cpuLoad }
     memoryInfo.value = mem
     uptime.value = window.services.getUptime()
+    systemStats.value = window.services.getSystemStats()
 
     cpuHistory.value.push(parseFloat(cpuLoad.load) || 0)
     memoryHistory.value.push(parseFloat(mem.usedPercent) || 0)
@@ -178,6 +184,15 @@ async function refreshDynamic() {
     
     // 磁盘：仅在磁盘 tab 时刷新（服务层已有 10 秒缓存）
     if (currentTab === 'disk') {
+      // 磁盘 IO 每秒刷新
+      const io = window.services.getDiskIO()
+      diskIO.value = io
+      diskReadHistory.value.push(io.readSec || 0)
+      diskWriteHistory.value.push(io.writeSec || 0)
+      if (diskReadHistory.value.length > maxDataPoints) diskReadHistory.value.shift()
+      if (diskWriteHistory.value.length > maxDataPoints) diskWriteHistory.value.shift()
+      
+      // 磁盘容量信息刷新频率较低
       window.services.getDiskInfo().then(disk => {
         diskInfo.value = disk
       })
@@ -208,10 +223,6 @@ onUnmounted(() => {
     <div class="sidebar">
       <div class="sidebar-header">
         系统监控
-        <span class="api-status" :class="apiStatus.loaded ? 'fast' : 'slow'" :title="apiStatus.error || '原生API已加载'">
-          {{ apiStatus.loaded ? '⚡' : '🐢' }}
-        </span>
-        <button class="refresh-btn" @click="loadData" title="刷新数据">🔄</button>
       </div>
       <div class="menu">
         <button
@@ -237,6 +248,8 @@ onUnmounted(() => {
           :systemInfo="systemInfo"
           :batteryInfo="batteryInfo"
           :processInfo="processInfo"
+          :systemStats="systemStats"
+          :gpuInfo="gpuInfo"
           :uptime="uptime"
         />
 
@@ -245,6 +258,7 @@ onUnmounted(() => {
           ref="cpuPanelRef"
           :cpuInfo="cpuInfo"
           :cpuHistory="cpuHistory"
+          :systemStats="systemStats"
         />
 
         <MemoryPanel 
@@ -257,6 +271,9 @@ onUnmounted(() => {
         <DiskPanel 
           v-if="activeTab === 'disk'"
           :diskInfo="diskInfo"
+          :diskIO="diskIO"
+          :diskReadHistory="diskReadHistory"
+          :diskWriteHistory="diskWriteHistory"
         />
 
         <NetworkPanel 
@@ -275,6 +292,7 @@ onUnmounted(() => {
         <ProcessPanel 
           v-if="activeTab === 'process'"
           :processInfo="processInfo"
+          :systemStats="systemStats"
         />
       </div>
     </div>
