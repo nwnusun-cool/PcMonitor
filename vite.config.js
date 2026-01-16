@@ -8,6 +8,7 @@ export default defineConfig({
   build: {
     // 排除 preload 目录，它会被单独复制
     copyPublicDir: true,
+    sourcemap: false,
     rollupOptions: {
       external: [/\.node$/]
     }
