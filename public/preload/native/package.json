@@ -1,0 +1,13 @@
+{
+  "name": "sysmon-native",
+  "version": "1.0.0",
+  "description": "Native Windows system monitor module",
+  "main": "index.js",
+  "scripts": {
+    "build": "node-gyp rebuild",
+    "build:electron": "node-gyp rebuild --target=22.0.0 --arch=x64 --dist-url=https://electronjs.org/headers"
+  },
+  "devDependencies": {
+    "node-gyp": "^10.0.0"
+  }
+}

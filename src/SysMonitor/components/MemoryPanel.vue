@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
-import { setupCanvas, drawChart } from '../composables/useChart'
+import { setupCanvas, drawChartWithHighlight, getDataIndexAtPosition } from '../composables/useChart'
 
 const props = defineProps({
   memoryInfo: Object,
@@ -8,13 +8,42 @@ const props = defineProps({
 })
 
 const canvasRef = ref(null)
+const tooltipVisible = ref(false)
+const tooltipX = ref(0)
+const tooltipY = ref(0)
+const tooltipValue = ref('')
+const highlightIndex = ref(-1)
 
 function redraw() {
   if (canvasRef.value && props.memoryHistory.length > 0) {
     requestAnimationFrame(() => {
-      drawChart(canvasRef.value, props.memoryHistory, '#34a853')
+      drawChartWithHighlight(canvasRef.value, props.memoryHistory, '#34a853', highlightIndex.value)
     })
   }
+}
+
+function handleMouseMove(e) {
+  if (!canvasRef.value || props.memoryHistory.length === 0) return
+  const rect = canvasRef.value.getBoundingClientRect()
+  const mouseX = e.clientX - rect.left
+  
+  const index = getDataIndexAtPosition(canvasRef.value, mouseX, props.memoryHistory.length)
+  if (index >= 0 && index < props.memoryHistory.length) {
+    highlightIndex.value = index
+    tooltipValue.value = props.memoryHistory[index].toFixed(1) + '%'
+    tooltipX.value = e.clientX - rect.left
+    tooltipY.value = e.clientY - rect.top - 35
+    tooltipVisible.value = true
+    redraw()
+  } else {
+    handleMouseLeave()
+  }
+}
+
+function handleMouseLeave() {
+  tooltipVisible.value = false
+  highlightIndex.value = -1
+  redraw()
 }
 
 onMounted(() => {
@@ -38,11 +67,24 @@ defineExpose({ redraw, canvasRef })
         <div class="trend-stat-item">
           <span class="trend-dot memory"></span>
           <span class="trend-label">内存使用率</span>
-          <span class="trend-value memory">{{ memoryInfo.usedPercent }}</span>
+          <span class="trend-value memory" v-if="memoryInfo.usedPercent">{{ memoryInfo.usedPercent }}</span>
+          <span class="skeleton-text" v-else></span>
         </div>
       </div>
       <div class="trend-chart-wrapper">
-        <canvas ref="canvasRef" class="trend-chart-canvas"></canvas>
+        <canvas 
+          ref="canvasRef" 
+          class="trend-chart-canvas"
+          @mousemove="handleMouseMove"
+          @mouseleave="handleMouseLeave"
+        ></canvas>
+        <div 
+          v-if="tooltipVisible" 
+          class="chart-tooltip"
+          :style="{ left: tooltipX + 'px', top: tooltipY + 'px' }"
+        >
+          {{ tooltipValue }}
+        </div>
       </div>
     </div>
 
@@ -51,19 +93,23 @@ defineExpose({ redraw, canvasRef })
     <div class="memory-overview">
       <div class="memory-stat">
         <span class="memory-stat-label">总内存</span>
-        <span class="memory-stat-value">{{ memoryInfo.total }}</span>
+        <span class="memory-stat-value" v-if="memoryInfo.total">{{ memoryInfo.total }}</span>
+        <span class="skeleton-text" v-else></span>
       </div>
       <div class="memory-stat">
         <span class="memory-stat-label">已使用</span>
-        <span class="memory-stat-value used">{{ memoryInfo.used }}</span>
+        <span class="memory-stat-value used" v-if="memoryInfo.used">{{ memoryInfo.used }}</span>
+        <span class="skeleton-text" v-else></span>
       </div>
       <div class="memory-stat">
         <span class="memory-stat-label">可用</span>
-        <span class="memory-stat-value available">{{ memoryInfo.available }}</span>
+        <span class="memory-stat-value available" v-if="memoryInfo.available">{{ memoryInfo.available }}</span>
+        <span class="skeleton-text" v-else></span>
       </div>
       <div class="memory-stat">
         <span class="memory-stat-label">使用率</span>
-        <span class="memory-stat-value percent">{{ memoryInfo.usedPercent }}</span>
+        <span class="memory-stat-value percent" v-if="memoryInfo.usedPercent">{{ memoryInfo.usedPercent }}</span>
+        <span class="skeleton-text" v-else></span>
       </div>
     </div>
 
@@ -72,11 +118,13 @@ defineExpose({ redraw, canvasRef })
     <div class="swap-overview">
       <div class="swap-stat">
         <span class="swap-stat-label">总量</span>
-        <span class="swap-stat-value">{{ memoryInfo.swapTotal }}</span>
+        <span class="swap-stat-value" v-if="memoryInfo.swapTotal">{{ memoryInfo.swapTotal }}</span>
+        <span class="skeleton-text" v-else></span>
       </div>
       <div class="swap-stat">
         <span class="swap-stat-label">已使用</span>
-        <span class="swap-stat-value used">{{ memoryInfo.swapUsed }}</span>
+        <span class="swap-stat-value used" v-if="memoryInfo.swapUsed">{{ memoryInfo.swapUsed }}</span>
+        <span class="skeleton-text" v-else></span>
       </div>
     </div>
   </div>
@@ -159,4 +207,34 @@ defineExpose({ redraw, canvasRef })
 }
 
 .swap-stat-value.used { color: #9334e6; }
+
+/* 骨架屏 */
+.skeleton-text {
+  display: inline-block;
+  height: 16px;
+  width: 70px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.chart-tooltip {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  z-index: 10;
+}
 </style>

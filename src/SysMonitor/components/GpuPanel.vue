@@ -8,52 +8,90 @@ defineProps({
   <div class="panel">
     <!-- 显卡信息 -->
     <h3>显卡信息</h3>
-    <div v-for="(gpu, index) in gpuInfo.controllers" :key="'gpu-'+index" class="gpu-card">
+    <div v-if="gpuInfo.controllers && gpuInfo.controllers.length > 0">
+      <div v-for="(gpu, index) in gpuInfo.controllers" :key="'gpu-'+index" class="gpu-card">
+        <div class="gpu-card-header">
+          <div class="gpu-icon">🎮</div>
+          <div class="gpu-info">
+            <div class="gpu-model">{{ gpu.model }}</div>
+            <div class="gpu-vendor">{{ gpu.vendor }} · {{ gpu.bus }}</div>
+          </div>
+        </div>
+        <div class="gpu-specs">
+          <div class="gpu-spec-item">
+            <span class="gpu-spec-label">显存</span>
+            <span class="gpu-spec-value">{{ gpu.vram }}</span>
+          </div>
+          <div class="gpu-spec-item">
+            <span class="gpu-spec-label">总线</span>
+            <span class="gpu-spec-value">{{ gpu.bus }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div v-else class="gpu-card skeleton-card">
       <div class="gpu-card-header">
-        <div class="gpu-icon">🎮</div>
+        <div class="skeleton-icon large"></div>
         <div class="gpu-info">
-          <div class="gpu-model">{{ gpu.model }}</div>
-          <div class="gpu-vendor">{{ gpu.vendor }} · {{ gpu.bus }}</div>
+          <div class="skeleton-text long"></div>
+          <div class="skeleton-text" style="margin-top: 6px;"></div>
         </div>
       </div>
       <div class="gpu-specs">
         <div class="gpu-spec-item">
           <span class="gpu-spec-label">显存</span>
-          <span class="gpu-spec-value">{{ gpu.vram }}</span>
+          <span class="skeleton-text short"></span>
         </div>
         <div class="gpu-spec-item">
           <span class="gpu-spec-label">总线</span>
-          <span class="gpu-spec-value">{{ gpu.bus }}</span>
+          <span class="skeleton-text short"></span>
         </div>
       </div>
     </div>
 
     <!-- 显示器信息 -->
-    <h3 v-if="gpuInfo.displays && gpuInfo.displays.length > 0">显示器</h3>
-    <div v-for="(display, index) in gpuInfo.displays" :key="'display-'+index" class="display-card">
+    <h3>显示器</h3>
+    <div v-if="gpuInfo.displays && gpuInfo.displays.length > 0">
+      <div v-for="(display, index) in gpuInfo.displays" :key="'display-'+index" class="display-card">
+        <div class="display-card-header">
+          <div class="display-icon">🖥️</div>
+          <div class="display-info">
+            <div class="display-name">{{ display.main ? '主显示器' : '副显示器' }}</div>
+            <div class="display-meta">{{ display.builtin ? '内置显示器' : '外接显示器' }} · {{ display.pixelDepth }}色深</div>
+          </div>
+        </div>
+        <div class="display-specs">
+          <div class="display-spec-item">
+            <span class="display-spec-label">原生分辨率</span>
+            <span class="display-spec-value">{{ display.resolutionX }}×{{ display.resolutionY }}</span>
+          </div>
+          <div class="display-spec-item">
+            <span class="display-spec-label">当前分辨率</span>
+            <span class="display-spec-value">{{ display.currentResX }}×{{ display.currentResY }}</span>
+          </div>
+          <div class="display-spec-item">
+            <span class="display-spec-label">刷新率</span>
+            <span class="display-spec-value highlight">{{ display.refreshRate }}</span>
+          </div>
+          <div class="display-spec-item" v-if="display.resolutionX && display.currentResX">
+            <span class="display-spec-label">缩放比例</span>
+            <span class="display-spec-value">{{ Math.round(display.resolutionX / display.currentResX * 100) }}%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div v-else class="display-card skeleton-card">
       <div class="display-card-header">
-        <div class="display-icon">🖥️</div>
+        <div class="skeleton-icon large"></div>
         <div class="display-info">
-          <div class="display-name">{{ display.main ? '主显示器' : '副显示器' }}</div>
-          <div class="display-meta">{{ display.builtin ? '内置显示器' : '外接显示器' }} · {{ display.pixelDepth }}色深</div>
+          <div class="skeleton-text"></div>
+          <div class="skeleton-text long" style="margin-top: 6px;"></div>
         </div>
       </div>
       <div class="display-specs">
-        <div class="display-spec-item">
-          <span class="display-spec-label">原生分辨率</span>
-          <span class="display-spec-value">{{ display.resolutionX }}×{{ display.resolutionY }}</span>
-        </div>
-        <div class="display-spec-item">
-          <span class="display-spec-label">当前分辨率</span>
-          <span class="display-spec-value">{{ display.currentResX }}×{{ display.currentResY }}</span>
-        </div>
-        <div class="display-spec-item">
-          <span class="display-spec-label">刷新率</span>
-          <span class="display-spec-value highlight">{{ display.refreshRate }}</span>
-        </div>
-        <div class="display-spec-item" v-if="display.resolutionX && display.currentResX">
-          <span class="display-spec-label">缩放比例</span>
-          <span class="display-spec-value">{{ Math.round(display.resolutionX / display.currentResX * 100) }}%</span>
+        <div class="display-spec-item" v-for="i in 4" :key="i">
+          <span class="display-spec-label">加载中</span>
+          <span class="skeleton-text short"></span>
         </div>
       </div>
     </div>
@@ -204,4 +242,36 @@ defineProps({
 }
 
 .display-spec-value.highlight { color: #0ea5e9; }
+
+/* 骨架屏 */
+.skeleton-text {
+  display: inline-block;
+  height: 14px;
+  width: 70px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+.skeleton-text.short { width: 50px; }
+.skeleton-text.long { width: 140px; }
+
+.skeleton-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+.skeleton-icon.large {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
 </style>

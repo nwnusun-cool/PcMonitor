@@ -1,5 +1,5 @@
 <script setup>
-defineProps({
+const props = defineProps({
   cpuInfo: Object,
   memoryInfo: Object,
   diskInfo: Object,
@@ -9,6 +9,9 @@ defineProps({
   processInfo: Object,
   uptime: String
 })
+
+// 判断数据是否已加载
+const hasData = (obj) => obj && Object.keys(obj).length > 0
 </script>
 
 <template>
@@ -19,8 +22,14 @@ defineProps({
         <div class="metric-icon">⚡</div>
         <div class="metric-content">
           <div class="metric-label">CPU使用率</div>
-          <div class="metric-value">{{ cpuInfo.load }}</div>
-          <div class="metric-detail">{{ cpuInfo.brand }}</div>
+          <div class="metric-value">
+            <span v-if="cpuInfo.load">{{ cpuInfo.load }}</span>
+            <span v-else class="skeleton-text medium"></span>
+          </div>
+          <div class="metric-detail">
+            <span v-if="cpuInfo.brand">{{ cpuInfo.brand }}</span>
+            <span v-else class="skeleton-text"></span>
+          </div>
         </div>
       </div>
       
@@ -28,8 +37,14 @@ defineProps({
         <div class="metric-icon">💾</div>
         <div class="metric-content">
           <div class="metric-label">内存使用率</div>
-          <div class="metric-value">{{ memoryInfo.usedPercent }}</div>
-          <div class="metric-detail">{{ memoryInfo.used }} / {{ memoryInfo.total }}</div>
+          <div class="metric-value">
+            <span v-if="memoryInfo.usedPercent">{{ memoryInfo.usedPercent }}</span>
+            <span v-else class="skeleton-text medium"></span>
+          </div>
+          <div class="metric-detail">
+            <span v-if="memoryInfo.used">{{ memoryInfo.used }} / {{ memoryInfo.total }}</span>
+            <span v-else class="skeleton-text"></span>
+          </div>
         </div>
       </div>
       
@@ -37,8 +52,14 @@ defineProps({
         <div class="metric-icon">💿</div>
         <div class="metric-content">
           <div class="metric-label">磁盘使用</div>
-          <div class="metric-value">{{ diskInfo.totalPercent || '0%' }}</div>
-          <div class="metric-detail">{{ diskInfo.totalUsed || '0 B' }} / {{ diskInfo.totalSize || '0 B' }}</div>
+          <div class="metric-value">
+            <span v-if="diskInfo.totalPercent">{{ diskInfo.totalPercent }}</span>
+            <span v-else class="skeleton-text medium"></span>
+          </div>
+          <div class="metric-detail">
+            <span v-if="diskInfo.totalUsed">{{ diskInfo.totalUsed }} / {{ diskInfo.totalSize }}</span>
+            <span v-else class="skeleton-text"></span>
+          </div>
         </div>
       </div>
       
@@ -46,8 +67,14 @@ defineProps({
         <div class="metric-icon">🌐</div>
         <div class="metric-content">
           <div class="metric-label">网络流量</div>
-          <div class="metric-value">↓ {{ networkInfo.stats?.[0]?.rxSec || '0 B/s' }}</div>
-          <div class="metric-detail">↑ {{ networkInfo.stats?.[0]?.txSec || '0 B/s' }}</div>
+          <div class="metric-value">
+            <span v-if="networkInfo.stats?.[0]">↓ {{ networkInfo.stats[0].rxSec }}</span>
+            <span v-else class="skeleton-text medium"></span>
+          </div>
+          <div class="metric-detail">
+            <span v-if="networkInfo.stats?.[0]">↑ {{ networkInfo.stats[0].txSec }}</span>
+            <span v-else class="skeleton-text"></span>
+          </div>
         </div>
       </div>
     </div>
@@ -57,19 +84,23 @@ defineProps({
     <div class="info-grid">
       <div class="info-item">
         <span class="label">操作系统</span>
-        <span class="value">{{ systemInfo.platform }} {{ systemInfo.arch }}</span>
+        <span class="value" v-if="systemInfo.platform">{{ systemInfo.platform }} {{ systemInfo.arch }}</span>
+        <span class="skeleton-text" v-else></span>
       </div>
       <div class="info-item">
         <span class="label">主机名</span>
-        <span class="value">{{ systemInfo.hostname }}</span>
+        <span class="value" v-if="systemInfo.hostname">{{ systemInfo.hostname }}</span>
+        <span class="skeleton-text" v-else></span>
       </div>
       <div class="info-item">
         <span class="label">运行时间</span>
-        <span class="value">{{ uptime }}</span>
+        <span class="value" v-if="uptime">{{ uptime }}</span>
+        <span class="skeleton-text" v-else></span>
       </div>
       <div class="info-item">
         <span class="label">设备型号</span>
-        <span class="value">{{ systemInfo.manufacturer }} {{ systemInfo.model }}</span>
+        <span class="value" v-if="systemInfo.manufacturer">{{ systemInfo.manufacturer }} {{ systemInfo.model }}</span>
+        <span class="skeleton-text long" v-else></span>
       </div>
     </div>
 
@@ -78,15 +109,18 @@ defineProps({
     <div class="info-grid">
       <div class="info-item">
         <span class="label">型号</span>
-        <span class="value">{{ cpuInfo.brand }}</span>
+        <span class="value" v-if="cpuInfo.brand">{{ cpuInfo.brand }}</span>
+        <span class="skeleton-text long" v-else></span>
       </div>
       <div class="info-item">
         <span class="label">核心数</span>
-        <span class="value">{{ cpuInfo.physicalCores }} 物理 / {{ cpuInfo.cores }} 逻辑</span>
+        <span class="value" v-if="cpuInfo.physicalCores">{{ cpuInfo.physicalCores }} 物理 / {{ cpuInfo.cores }} 逻辑</span>
+        <span class="skeleton-text" v-else></span>
       </div>
       <div class="info-item">
         <span class="label">当前频率</span>
-        <span class="value">{{ cpuInfo.currentSpeed }}</span>
+        <span class="value" v-if="cpuInfo.currentSpeed">{{ cpuInfo.currentSpeed }}</span>
+        <span class="skeleton-text short" v-else></span>
       </div>
       <div class="info-item" v-if="cpuInfo.temperature">
         <span class="label">温度</span>
@@ -99,19 +133,23 @@ defineProps({
     <div class="info-grid">
       <div class="info-item">
         <span class="label">总内存</span>
-        <span class="value">{{ memoryInfo.total }}</span>
+        <span class="value" v-if="memoryInfo.total">{{ memoryInfo.total }}</span>
+        <span class="skeleton-text short" v-else></span>
       </div>
       <div class="info-item">
         <span class="label">已使用</span>
-        <span class="value">{{ memoryInfo.used }}</span>
+        <span class="value" v-if="memoryInfo.used">{{ memoryInfo.used }}</span>
+        <span class="skeleton-text short" v-else></span>
       </div>
       <div class="info-item">
         <span class="label">可用</span>
-        <span class="value">{{ memoryInfo.available }}</span>
+        <span class="value" v-if="memoryInfo.available">{{ memoryInfo.available }}</span>
+        <span class="skeleton-text short" v-else></span>
       </div>
       <div class="info-item">
         <span class="label">使用率</span>
-        <span class="value">{{ memoryInfo.usedPercent }}</span>
+        <span class="value" v-if="memoryInfo.usedPercent">{{ memoryInfo.usedPercent }}</span>
+        <span class="skeleton-text short" v-else></span>
       </div>
     </div>
 
@@ -134,15 +172,18 @@ defineProps({
     <div class="process-stats">
       <div class="stat-item">
         <div class="stat-label">总进程数</div>
-        <div class="stat-value">{{ processInfo.all }}</div>
+        <div class="stat-value" v-if="processInfo.all !== undefined">{{ processInfo.all }}</div>
+        <div class="skeleton-text center" v-else></div>
       </div>
       <div class="stat-item">
         <div class="stat-label">运行中</div>
-        <div class="stat-value running">{{ processInfo.running }}</div>
+        <div class="stat-value running" v-if="processInfo.running !== undefined">{{ processInfo.running }}</div>
+        <div class="skeleton-text center" v-else></div>
       </div>
       <div class="stat-item">
         <div class="stat-label">休眠中</div>
-        <div class="stat-value">{{ processInfo.all - processInfo.running }}</div>
+        <div class="stat-value" v-if="processInfo.all !== undefined">{{ processInfo.all - processInfo.running }}</div>
+        <div class="skeleton-text center" v-else></div>
       </div>
     </div>
   </div>
@@ -333,4 +374,35 @@ defineProps({
 }
 
 .stat-value.running { color: #34a853; }
+
+/* 骨架屏文本占位 */
+.skeleton-text {
+  display: inline-block;
+  height: 14px;
+  width: 80px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+
+.skeleton-text.short { width: 50px; }
+.skeleton-text.medium { width: 60px; height: 20px; }
+.skeleton-text.long { width: 120px; }
+.skeleton-text.center { 
+  display: block;
+  margin: 0 auto;
+  height: 28px;
+  width: 50px;
+}
+
+.metric-value .skeleton-text {
+  height: 24px;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
 </style>

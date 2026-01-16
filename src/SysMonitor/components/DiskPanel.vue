@@ -2,6 +2,15 @@
 defineProps({
   diskInfo: Object
 })
+
+// 打开磁盘分区
+function openDisk(mount) {
+  if (mount && window.utools) {
+    // Windows 盘符需要加反斜杠，如 D: -> D:\
+    const path = mount.endsWith('\\') || mount.endsWith('/') ? mount : mount + '\\'
+    window.utools.shellOpenPath(path)
+  }
+}
 </script>
 
 <template>
@@ -11,24 +20,28 @@ defineProps({
     <div class="storage-overview">
       <div class="storage-stat">
         <span class="storage-label">总容量</span>
-        <span class="storage-value">{{ diskInfo.totalSize }}</span>
+        <span class="storage-value" v-if="diskInfo.totalSize && diskInfo.totalSize !== '0 B'">{{ diskInfo.totalSize }}</span>
+        <span class="skeleton-text" v-else></span>
       </div>
       <div class="storage-stat">
         <span class="storage-label">已使用</span>
-        <span class="storage-value used">{{ diskInfo.totalUsed }}</span>
+        <span class="storage-value used" v-if="diskInfo.totalUsed && diskInfo.totalUsed !== '0 B'">{{ diskInfo.totalUsed }}</span>
+        <span class="skeleton-text" v-else></span>
       </div>
       <div class="storage-stat">
         <span class="storage-label">可用</span>
-        <span class="storage-value available">{{ diskInfo.totalAvailable }}</span>
+        <span class="storage-value available" v-if="diskInfo.totalAvailable && diskInfo.totalAvailable !== '0 B'">{{ diskInfo.totalAvailable }}</span>
+        <span class="skeleton-text" v-else></span>
       </div>
       <div class="storage-stat">
         <span class="storage-label">使用率</span>
-        <span class="storage-value percent">{{ diskInfo.totalPercent }}</span>
+        <span class="storage-value percent" v-if="diskInfo.totalPercent && diskInfo.totalPercent !== '0%'">{{ diskInfo.totalPercent }}</span>
+        <span class="skeleton-text" v-else></span>
       </div>
     </div>
 
     <!-- 物理磁盘 -->
-    <h3 v-if="diskInfo.physical && diskInfo.physical.length > 0">物理磁盘</h3>
+    <h3>物理磁盘</h3>
     <div class="physical-disks" v-if="diskInfo.physical && diskInfo.physical.length > 0">
       <div v-for="(disk, index) in diskInfo.physical" :key="index" class="physical-disk-item">
         <div class="physical-disk-icon">💿</div>
@@ -39,11 +52,26 @@ defineProps({
         <div class="physical-disk-size">{{ disk.size }}</div>
       </div>
     </div>
+    <div class="skeleton-list" v-else>
+      <div class="skeleton-item" v-for="i in 2" :key="i">
+        <div class="skeleton-icon"></div>
+        <div class="skeleton-content">
+          <div class="skeleton-text long"></div>
+          <div class="skeleton-text"></div>
+        </div>
+      </div>
+    </div>
 
     <!-- 磁盘分区 -->
     <h3>磁盘分区</h3>
-    <div class="partitions-grid">
-      <div v-for="partition in diskInfo.partitions" :key="partition.mount" class="partition-item">
+    <div class="partitions-grid" v-if="diskInfo.partitions && diskInfo.partitions.length > 0">
+      <div 
+        v-for="partition in diskInfo.partitions" 
+        :key="partition.mount" 
+        class="partition-item clickable"
+        @click="openDisk(partition.mount)"
+        :title="'点击打开 ' + partition.mount"
+      >
         <div class="partition-top">
           <span class="partition-mount">{{ partition.mount }}</span>
           <span class="partition-percent">{{ partition.usedPercent }}</span>
@@ -54,6 +82,19 @@ defineProps({
         <div class="partition-bottom">
           <span class="partition-type">{{ partition.type }}</span>
           <span class="partition-usage">{{ partition.used }} / {{ partition.size }}</span>
+        </div>
+      </div>
+    </div>
+    <div class="partitions-grid" v-else>
+      <div class="partition-item skeleton-partition" v-for="i in 3" :key="i">
+        <div class="partition-top">
+          <span class="skeleton-text short"></span>
+          <span class="skeleton-text short"></span>
+        </div>
+        <div class="partition-bar"><div class="partition-bar-fill skeleton-bar"></div></div>
+        <div class="partition-bottom">
+          <span class="skeleton-text short"></span>
+          <span class="skeleton-text"></span>
         </div>
       </div>
     </div>
@@ -164,6 +205,21 @@ defineProps({
 
 .partition-item:hover { border-color: #9334e6; }
 
+.partition-item.clickable {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.partition-item.clickable:hover {
+  border-color: #9334e6;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(147, 52, 230, 0.15);
+}
+
+.partition-item.clickable:active {
+  transform: translateY(0);
+}
+
 .partition-top {
   display: flex;
   justify-content: space-between;
@@ -214,5 +270,63 @@ defineProps({
 .partition-usage {
   font-size: 11px;
   color: #666;
+}
+
+/* 骨架屏 */
+.skeleton-text {
+  display: inline-block;
+  height: 14px;
+  width: 70px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+.skeleton-text.short { width: 40px; }
+.skeleton-text.long { width: 120px; }
+
+.skeleton-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.skeleton-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.skeleton-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeleton-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.skeleton-partition .partition-bar-fill.skeleton-bar {
+  width: 60%;
+  background: linear-gradient(90deg, #e0e0e0 25%, #d0d0d0 50%, #e0e0e0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }
 </style>

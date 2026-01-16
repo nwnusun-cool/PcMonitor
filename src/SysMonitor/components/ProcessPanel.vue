@@ -11,15 +11,18 @@ defineProps({
     <div class="process-overview">
       <div class="process-stat-card">
         <span class="process-stat-label">总进程</span>
-        <span class="process-stat-value">{{ processInfo.all }}</span>
+        <span class="process-stat-value" v-if="processInfo.all">{{ processInfo.all }}</span>
+        <span class="skeleton-text center" v-else></span>
       </div>
       <div class="process-stat-card">
         <span class="process-stat-label">CPU Top 1</span>
-        <span class="process-stat-value cpu-top">{{ processInfo.topCpu?.[0]?.cpu || '0%' }}</span>
+        <span class="process-stat-value cpu-top" v-if="processInfo.topCpu?.[0]">{{ processInfo.topCpu[0].cpu }}</span>
+        <span class="skeleton-text center" v-else></span>
       </div>
       <div class="process-stat-card">
         <span class="process-stat-label">内存 Top 1</span>
-        <span class="process-stat-value mem-top">{{ processInfo.topMem?.[0]?.mem || '0%' }}</span>
+        <span class="process-stat-value mem-top" v-if="processInfo.topMem?.[0]">{{ processInfo.topMem[0].mem }}</span>
+        <span class="skeleton-text center" v-else></span>
       </div>
       <div class="process-stat-card">
         <span class="process-stat-label">监控中</span>
@@ -39,7 +42,7 @@ defineProps({
             <th class="col-mem">内存</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody v-if="processInfo.topCpu && processInfo.topCpu.length > 0">
           <tr v-for="proc in processInfo.topCpu" :key="'cpu-'+proc.pid">
             <td class="col-name">{{ proc.name }}</td>
             <td class="col-pid">{{ proc.pid }}</td>
@@ -50,6 +53,14 @@ defineProps({
               </div>
             </td>
             <td class="col-mem">{{ proc.mem }}</td>
+          </tr>
+        </tbody>
+        <tbody v-else>
+          <tr v-for="i in 5" :key="'skeleton-cpu-'+i" class="skeleton-row">
+            <td class="col-name"><span class="skeleton-text"></span></td>
+            <td class="col-pid"><span class="skeleton-text short"></span></td>
+            <td class="col-cpu"><span class="skeleton-text"></span></td>
+            <td class="col-mem"><span class="skeleton-text short"></span></td>
           </tr>
         </tbody>
       </table>
@@ -67,7 +78,7 @@ defineProps({
             <th class="col-mem">内存</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody v-if="processInfo.topMem && processInfo.topMem.length > 0">
           <tr v-for="proc in processInfo.topMem" :key="'mem-'+proc.pid">
             <td class="col-name">{{ proc.name }}</td>
             <td class="col-pid">{{ proc.pid }}</td>
@@ -78,6 +89,14 @@ defineProps({
                 <span class="usage-text">{{ proc.mem }}</span>
               </div>
             </td>
+          </tr>
+        </tbody>
+        <tbody v-else>
+          <tr v-for="i in 5" :key="'skeleton-mem-'+i" class="skeleton-row">
+            <td class="col-name"><span class="skeleton-text"></span></td>
+            <td class="col-pid"><span class="skeleton-text short"></span></td>
+            <td class="col-cpu"><span class="skeleton-text short"></span></td>
+            <td class="col-mem"><span class="skeleton-text"></span></td>
           </tr>
         </tbody>
       </table>
@@ -214,5 +233,32 @@ defineProps({
 .usage-text {
   font-weight: 600;
   min-width: 45px;
+}
+
+/* 骨架屏 */
+.skeleton-text {
+  display: inline-block;
+  height: 12px;
+  width: 70px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+.skeleton-text.short { width: 40px; }
+.skeleton-text.center {
+  display: block;
+  margin: 0 auto;
+  height: 24px;
+  width: 50px;
+}
+
+.skeleton-row td {
+  padding: 12px !important;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }
 </style>

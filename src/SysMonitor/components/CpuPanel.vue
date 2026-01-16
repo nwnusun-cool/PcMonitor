@@ -1,26 +1,50 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
-import { setupCanvas, drawMultiLineChart } from '../composables/useChart'
+import { setupCanvas, drawChartWithHighlight, getDataIndexAtPosition } from '../composables/useChart'
 
 const props = defineProps({
   cpuInfo: Object,
-  cpuHistory: Array,
-  cpuUserHistory: Array,
-  cpuSystemHistory: Array
+  cpuHistory: Array
 })
 
 const canvasRef = ref(null)
+const tooltipVisible = ref(false)
+const tooltipX = ref(0)
+const tooltipY = ref(0)
+const tooltipValue = ref('')
+const highlightIndex = ref(-1)
 
 function redraw() {
   if (canvasRef.value && props.cpuHistory.length > 0) {
     requestAnimationFrame(() => {
-      drawMultiLineChart(canvasRef.value, [
-        { data: props.cpuHistory, color: '#1a73e8' },
-        { data: props.cpuUserHistory, color: '#fbbc04' },
-        { data: props.cpuSystemHistory, color: '#ea4335' }
-      ])
+      drawChartWithHighlight(canvasRef.value, props.cpuHistory, '#1a73e8', highlightIndex.value)
     })
   }
+}
+
+function handleMouseMove(e) {
+  if (!canvasRef.value || props.cpuHistory.length === 0) return
+  const rect = canvasRef.value.getBoundingClientRect()
+  const mouseX = e.clientX - rect.left
+  const mouseY = e.clientY - rect.top
+  
+  const index = getDataIndexAtPosition(canvasRef.value, mouseX, props.cpuHistory.length)
+  if (index >= 0 && index < props.cpuHistory.length) {
+    highlightIndex.value = index
+    tooltipValue.value = props.cpuHistory[index].toFixed(1) + '%'
+    tooltipX.value = e.clientX - rect.left
+    tooltipY.value = e.clientY - rect.top - 35
+    tooltipVisible.value = true
+    redraw()
+  } else {
+    handleMouseLeave()
+  }
+}
+
+function handleMouseLeave() {
+  tooltipVisible.value = false
+  highlightIndex.value = -1
+  redraw()
 }
 
 onMounted(() => {
@@ -43,22 +67,25 @@ defineExpose({ redraw, canvasRef })
       <div class="trend-stats">
         <div class="trend-stat-item">
           <span class="trend-dot total"></span>
-          <span class="trend-label">总使用率</span>
-          <span class="trend-value total">{{ cpuInfo.load }}</span>
-        </div>
-        <div class="trend-stat-item">
-          <span class="trend-dot user"></span>
-          <span class="trend-label">用户</span>
-          <span class="trend-value user">{{ cpuInfo.loadUser }}</span>
-        </div>
-        <div class="trend-stat-item">
-          <span class="trend-dot system"></span>
-          <span class="trend-label">系统</span>
-          <span class="trend-value system">{{ cpuInfo.loadSystem }}</span>
+          <span class="trend-label">CPU 使用率</span>
+          <span class="trend-value total" v-if="cpuInfo.load">{{ cpuInfo.load }}</span>
+          <span class="skeleton-text" v-else></span>
         </div>
       </div>
       <div class="trend-chart-wrapper">
-        <canvas ref="canvasRef" class="trend-chart-canvas"></canvas>
+        <canvas 
+          ref="canvasRef" 
+          class="trend-chart-canvas"
+          @mousemove="handleMouseMove"
+          @mouseleave="handleMouseLeave"
+        ></canvas>
+        <div 
+          v-if="tooltipVisible" 
+          class="chart-tooltip"
+          :style="{ left: tooltipX + 'px', top: tooltipY + 'px' }"
+        >
+          {{ tooltipValue }}
+        </div>
       </div>
     </div>
 
@@ -67,8 +94,10 @@ defineExpose({ redraw, canvasRef })
     <div class="cpu-brand-card">
       <div class="cpu-brand-icon">⚡</div>
       <div class="cpu-brand-info">
-        <div class="cpu-brand-name">{{ cpuInfo.brand }}</div>
-        <div class="cpu-brand-meta">{{ cpuInfo.manufacturer }}</div>
+        <div class="cpu-brand-name" v-if="cpuInfo.brand">{{ cpuInfo.brand }}</div>
+        <div class="skeleton-text long" v-else></div>
+        <div class="cpu-brand-meta" v-if="cpuInfo.manufacturer">{{ cpuInfo.manufacturer }}</div>
+        <div class="skeleton-text short" v-else></div>
       </div>
     </div>
 
@@ -77,23 +106,28 @@ defineExpose({ redraw, canvasRef })
     <div class="cpu-specs-grid">
       <div class="cpu-spec-card">
         <span class="cpu-spec-label">物理核心</span>
-        <span class="cpu-spec-value">{{ cpuInfo.physicalCores }}</span>
+        <span class="cpu-spec-value" v-if="cpuInfo.physicalCores">{{ cpuInfo.physicalCores }}</span>
+        <span class="skeleton-text short" v-else></span>
       </div>
       <div class="cpu-spec-card">
         <span class="cpu-spec-label">逻辑核心</span>
-        <span class="cpu-spec-value">{{ cpuInfo.cores }}</span>
+        <span class="cpu-spec-value" v-if="cpuInfo.cores">{{ cpuInfo.cores }}</span>
+        <span class="skeleton-text short" v-else></span>
       </div>
       <div class="cpu-spec-card">
         <span class="cpu-spec-label">基础频率</span>
-        <span class="cpu-spec-value">{{ cpuInfo.speed }}</span>
+        <span class="cpu-spec-value" v-if="cpuInfo.speed">{{ cpuInfo.speed }}</span>
+        <span class="skeleton-text" v-else></span>
       </div>
       <div class="cpu-spec-card">
         <span class="cpu-spec-label">当前频率</span>
-        <span class="cpu-spec-value highlight">{{ cpuInfo.currentSpeed }}</span>
+        <span class="cpu-spec-value highlight" v-if="cpuInfo.currentSpeed">{{ cpuInfo.currentSpeed }}</span>
+        <span class="skeleton-text" v-else></span>
       </div>
       <div class="cpu-spec-card">
         <span class="cpu-spec-label">虚拟化</span>
-        <span class="cpu-spec-value">{{ cpuInfo.virtualization }}</span>
+        <span class="cpu-spec-value" v-if="cpuInfo.virtualization">{{ cpuInfo.virtualization }}</span>
+        <span class="skeleton-text short" v-else></span>
       </div>
     </div>
 
@@ -261,5 +295,38 @@ defineExpose({ redraw, canvasRef })
   font-size: 24px;
   font-weight: 700;
   color: #ea4335;
+}
+
+/* 骨架屏 */
+.skeleton-text {
+  display: inline-block;
+  height: 14px;
+  width: 60px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+.skeleton-text.short { width: 40px; }
+.skeleton-text.long { width: 120px; }
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.chart-tooltip {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  z-index: 10;
 }
 </style>
