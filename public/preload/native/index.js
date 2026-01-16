@@ -44,6 +44,16 @@ module.exports = {
     return formatUptime(native.getUptime().seconds)
   },
 
+  getSystemStats() {
+    if (!native) return null
+    const s = native.getSystemStats()
+    return {
+      processCount: s.processCount,
+      threadCount: s.threadCount,
+      handleCount: s.handleCount
+    }
+  },
+
   getSystemInfo() {
     if (!native) return null
     const s = native.getSystemInfo()
@@ -118,6 +128,17 @@ module.exports = {
       totalPercent: totalSize > 0 ? ((totalUsed / totalSize) * 100).toFixed(1) + '%' : '0%' }
   },
 
+  getDiskIO() {
+    if (!native) return { readSec: 0, writeSec: 0, readSecFmt: '0 B/s', writeSecFmt: '0 B/s' }
+    const io = native.getDiskIO()
+    return {
+      readSec: io.readSec,
+      writeSec: io.writeSec,
+      readSecFmt: formatBytes(io.readSec) + '/s',
+      writeSecFmt: formatBytes(io.writeSec) + '/s'
+    }
+  },
+
   getNetworkStats() {
     if (!native) return null
     const n = native.getNetworkStats()
@@ -129,9 +150,24 @@ module.exports = {
   getProcessList() {
     if (!native) return null
     const p = native.getProcessList(), totalMem = native.getMemoryInfo().total
-    const list = (p.processes || []).map(proc => ({ pid: proc.pid, name: proc.name, memory: formatBytes(proc.memory),
-      memoryRaw: proc.memory, memPercent: ((proc.memory / totalMem) * 100).toFixed(1) + '%' }))
-    list.sort((a, b) => b.memoryRaw - a.memoryRaw)
-    return { count: p.count, topMem: list.slice(0, 15), topCpu: list.slice(0, 15) }
+    const list = (p.processes || []).map(proc => ({
+      pid: proc.pid,
+      name: proc.name,
+      memory: formatBytes(proc.memory),
+      memoryRaw: proc.memory,
+      memPercent: ((proc.memory / totalMem) * 100).toFixed(1) + '%',
+      memPercentRaw: (proc.memory / totalMem) * 100,
+      threads: proc.threads || 0,
+      handles: proc.handles || 0,
+      cpu: (proc.cpu || 0).toFixed(1) + '%',
+      cpuRaw: proc.cpu || 0
+    }))
+    
+    // Sort by memory for topMem
+    const topMem = [...list].sort((a, b) => b.memoryRaw - a.memoryRaw).slice(0, 15)
+    // Sort by CPU for topCpu
+    const topCpu = [...list].sort((a, b) => b.cpuRaw - a.cpuRaw).slice(0, 15)
+    
+    return { count: p.count, list, topMem, topCpu }
   }
 }

@@ -96,6 +96,63 @@ napi_value GetUptime(napi_env env, napi_callback_info info) {
     return result;
 }
 
+// System Stats (process count, thread count, handle count)
+napi_value GetSystemStats(napi_env env, napi_callback_info info) {
+    napi_value result; napi_create_object(env, &result);
+    napi_value v;
+    
+    DWORD processCount = 0, threadCount = 0;
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS | TH32CS_SNAPTHREAD, 0);
+    if (snap != INVALID_HANDLE_VALUE) {
+        // Count processes
+        PROCESSENTRY32W pe; pe.dwSize = sizeof(pe);
+        if (Process32FirstW(snap, &pe)) {
+            do { processCount++; } while (Process32NextW(snap, &pe));
+        }
+        // Count threads
+        THREADENTRY32 te; te.dwSize = sizeof(te);
+        if (Thread32First(snap, &te)) {
+            do { threadCount++; } while (Thread32Next(snap, &te));
+        }
+        CloseHandle(snap);
+    }
+    
+    // Get system handle count using PDH (same as Task Manager)
+    DWORD handleCount = 0;
+    PDH_HQUERY hQuery = NULL;
+    PDH_HCOUNTER hCounter = NULL;
+    if (PdhOpenQuery(NULL, 0, &hQuery) == ERROR_SUCCESS) {
+        // Try different counter paths
+        const wchar_t* counterPaths[] = {
+            L"\\Process(_Total)\\Handle Count",
+            L"\\System\\Handle Count"
+        };
+        for (auto path : counterPaths) {
+            if (PdhAddEnglishCounterW(hQuery, path, 0, &hCounter) == ERROR_SUCCESS) {
+                PdhCollectQueryData(hQuery);
+                Sleep(10);
+                if (PdhCollectQueryData(hQuery) == ERROR_SUCCESS) {
+                    PDH_FMT_COUNTERVALUE value;
+                    if (PdhGetFormattedCounterValue(hCounter, PDH_FMT_LONG, NULL, &value) == ERROR_SUCCESS) {
+                        if (value.longValue > 0) {
+                            handleCount = value.longValue;
+                            break;
+                        }
+                    }
+                }
+                PdhRemoveCounter(hCounter);
+                hCounter = NULL;
+            }
+        }
+        PdhCloseQuery(hQuery);
+    }
+    
+    napi_create_uint32(env, processCount, &v); napi_set_named_property(env, result, "processCount", v);
+    napi_create_uint32(env, threadCount, &v); napi_set_named_property(env, result, "threadCount", v);
+    napi_create_uint32(env, handleCount, &v); napi_set_named_property(env, result, "handleCount", v);
+    return result;
+}
+
 // System Info
 napi_value GetSystemInfo(napi_env env, napi_callback_info info) {
     napi_value result; napi_create_object(env, &result);
@@ -403,6 +460,50 @@ napi_value GetDiskInfo(napi_env env, napi_callback_info info) {
     return result;
 }
 
+// Disk IO Stats (read/write bytes per second)
+static ULONGLONG prevDiskReadBytes = 0, prevDiskWriteBytes = 0;
+static ULONGLONG prevDiskTime = 0;
+
+napi_value GetDiskIO(napi_env env, napi_callback_info info) {
+    napi_value result; napi_create_object(env, &result);
+    napi_value v;
+    
+    // Use PDH to get disk IO (same as Task Manager)
+    static PDH_HQUERY diskQuery = NULL;
+    static PDH_HCOUNTER readCounter = NULL, writeCounter = NULL;
+    static bool diskIoInit = false;
+    
+    if (!diskIoInit) {
+        if (PdhOpenQuery(NULL, 0, &diskQuery) == ERROR_SUCCESS) {
+            PdhAddEnglishCounterW(diskQuery, L"\\PhysicalDisk(_Total)\\Disk Read Bytes/sec", 0, &readCounter);
+            PdhAddEnglishCounterW(diskQuery, L"\\PhysicalDisk(_Total)\\Disk Write Bytes/sec", 0, &writeCounter);
+            PdhCollectQueryData(diskQuery);
+        }
+        diskIoInit = true;
+    }
+    
+    double readSec = 0, writeSec = 0;
+    
+    if (diskQuery) {
+        if (PdhCollectQueryData(diskQuery) == ERROR_SUCCESS) {
+            PDH_FMT_COUNTERVALUE value;
+            if (readCounter && PdhGetFormattedCounterValue(readCounter, PDH_FMT_DOUBLE, NULL, &value) == ERROR_SUCCESS) {
+                readSec = value.doubleValue;
+            }
+            if (writeCounter && PdhGetFormattedCounterValue(writeCounter, PDH_FMT_DOUBLE, NULL, &value) == ERROR_SUCCESS) {
+                writeSec = value.doubleValue;
+            }
+        }
+    }
+    
+    if (readSec < 0) readSec = 0;
+    if (writeSec < 0) writeSec = 0;
+    
+    napi_create_double(env, readSec, &v); napi_set_named_property(env, result, "readSec", v);
+    napi_create_double(env, writeSec, &v); napi_set_named_property(env, result, "writeSec", v);
+    return result;
+}
+
 // Network Stats
 struct NetCache { DWORD idx; ULONGLONG rx, tx; };
 static std::vector<NetCache> netCache;
@@ -477,9 +578,24 @@ napi_value GetNetworkStats(napi_env env, napi_callback_info info) {
 }
 
 
-// Process List
+// Process List with detailed info
+struct ProcessCpuCache { DWORD pid; ULONGLONG kernelTime, userTime; };
+static std::vector<ProcessCpuCache> procCpuCache;
+static ULONGLONG procCpuTime = 0;
+
 napi_value GetProcessList(napi_env env, napi_callback_info info) {
     napi_value result, procs; napi_create_object(env, &result); napi_create_array(env, &procs);
+    
+    // Get system times for CPU calculation
+    FILETIME idleTime, kernelTime, userTime;
+    GetSystemTimes(&idleTime, &kernelTime, &userTime);
+    ULONGLONG sysKernel = ((ULONGLONG)kernelTime.dwHighDateTime << 32) | kernelTime.dwLowDateTime;
+    ULONGLONG sysUser = ((ULONGLONG)userTime.dwHighDateTime << 32) | userTime.dwLowDateTime;
+    ULONGLONG sysTotal = sysKernel + sysUser;
+    ULONGLONG now = GetTickCount64();
+    double dt = procCpuTime > 0 ? (now - procCpuTime) / 1000.0 : 1.0;
+    if (dt < 0.1) dt = 1.0;
+    
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snap == INVALID_HANDLE_VALUE) {
         napi_set_named_property(env, result, "processes", procs);
@@ -488,29 +604,74 @@ napi_value GetProcessList(napi_env env, napi_callback_info info) {
     }
     
     PROCESSENTRY32W pe; pe.dwSize = sizeof(pe);
-    std::vector<std::pair<DWORD, std::wstring>> list;
-    if (Process32FirstW(snap, &pe)) do {
-        if (pe.th32ProcessID != 0) list.push_back({ pe.th32ProcessID, pe.szExeFile });
-    } while (Process32NextW(snap, &pe));
-    CloseHandle(snap);
+    struct ProcInfo { DWORD pid; std::wstring name; DWORD threads; SIZE_T memory; DWORD handles; double cpu; };
+    std::vector<ProcInfo> list;
+    std::vector<ProcessCpuCache> newCpuCache;
     
-    uint32_t idx = 0;
-    for (auto& p : list) {
-        HANDLE h = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, p.first);
+    if (Process32FirstW(snap, &pe)) do {
+        if (pe.th32ProcessID == 0) continue;
+        
+        ProcInfo pi = { pe.th32ProcessID, pe.szExeFile, pe.cntThreads, 0, 0, 0 };
+        
+        HANDLE h = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pe.th32ProcessID);
         if (h) {
+            // Memory
             PROCESS_MEMORY_COUNTERS pmc;
             if (GetProcessMemoryInfo(h, &pmc, sizeof(pmc))) {
-                napi_value proc; napi_create_object(env, &proc);
-                napi_value v;
-                napi_create_uint32(env, p.first, &v); napi_set_named_property(env, proc, "pid", v);
-                napi_create_string_utf8(env, WideToUtf8(p.second.c_str()).c_str(), NAPI_AUTO_LENGTH, &v);
-                napi_set_named_property(env, proc, "name", v);
-                napi_create_double(env, (double)pmc.WorkingSetSize, &v); napi_set_named_property(env, proc, "memory", v);
-                napi_set_element(env, procs, idx++, proc);
+                pi.memory = pmc.WorkingSetSize;
+            }
+            
+            // Handle count
+            DWORD hc = 0;
+            GetProcessHandleCount(h, &hc);
+            pi.handles = hc;
+            
+            // CPU usage
+            FILETIME createTime, exitTime, procKernel, procUser;
+            if (GetProcessTimes(h, &createTime, &exitTime, &procKernel, &procUser)) {
+                ULONGLONG pKernel = ((ULONGLONG)procKernel.dwHighDateTime << 32) | procKernel.dwLowDateTime;
+                ULONGLONG pUser = ((ULONGLONG)procUser.dwHighDateTime << 32) | procUser.dwLowDateTime;
+                
+                // Find previous values
+                for (auto& c : procCpuCache) {
+                    if (c.pid == pe.th32ProcessID) {
+                        ULONGLONG kDiff = pKernel - c.kernelTime;
+                        ULONGLONG uDiff = pUser - c.userTime;
+                        // CPU % = (process time diff) / (elapsed time * num cores) * 100
+                        SYSTEM_INFO si; GetNativeSystemInfo(&si);
+                        double elapsed = dt * 10000000.0; // Convert to 100ns units
+                        pi.cpu = ((double)(kDiff + uDiff) / (elapsed * si.dwNumberOfProcessors)) * 100.0;
+                        if (pi.cpu < 0) pi.cpu = 0;
+                        if (pi.cpu > 100) pi.cpu = 100;
+                        break;
+                    }
+                }
+                newCpuCache.push_back({ pe.th32ProcessID, pKernel, pUser });
             }
             CloseHandle(h);
         }
+        
+        list.push_back(pi);
+    } while (Process32NextW(snap, &pe));
+    CloseHandle(snap);
+    
+    procCpuCache = newCpuCache;
+    procCpuTime = now;
+    
+    uint32_t idx = 0;
+    for (auto& p : list) {
+        napi_value proc; napi_create_object(env, &proc);
+        napi_value v;
+        napi_create_uint32(env, p.pid, &v); napi_set_named_property(env, proc, "pid", v);
+        napi_create_string_utf8(env, WideToUtf8(p.name.c_str()).c_str(), NAPI_AUTO_LENGTH, &v);
+        napi_set_named_property(env, proc, "name", v);
+        napi_create_double(env, (double)p.memory, &v); napi_set_named_property(env, proc, "memory", v);
+        napi_create_uint32(env, p.threads, &v); napi_set_named_property(env, proc, "threads", v);
+        napi_create_uint32(env, p.handles, &v); napi_set_named_property(env, proc, "handles", v);
+        napi_create_double(env, p.cpu, &v); napi_set_named_property(env, proc, "cpu", v);
+        napi_set_element(env, procs, idx++, proc);
     }
+    
     napi_set_named_property(env, result, "processes", procs);
     napi_value v; napi_create_uint32(env, (uint32_t)list.size(), &v); napi_set_named_property(env, result, "count", v);
     return result;
@@ -522,11 +683,13 @@ napi_value Init(napi_env env, napi_value exports) {
         { "getMemoryInfo", 0, GetMemoryInfo, 0, 0, 0, napi_default, 0 },
         { "getCpuUsage", 0, GetCpuUsage, 0, 0, 0, napi_default, 0 },
         { "getUptime", 0, GetUptime, 0, 0, 0, napi_default, 0 },
+        { "getSystemStats", 0, GetSystemStats, 0, 0, 0, napi_default, 0 },
         { "getSystemInfo", 0, GetSystemInfo, 0, 0, 0, napi_default, 0 },
         { "getCpuInfo", 0, GetCpuInfo, 0, 0, 0, napi_default, 0 },
         { "getGpuInfo", 0, GetGpuInfo, 0, 0, 0, napi_default, 0 },
         { "getBatteryInfo", 0, GetBatteryInfo, 0, 0, 0, napi_default, 0 },
         { "getDiskInfo", 0, GetDiskInfo, 0, 0, 0, napi_default, 0 },
+        { "getDiskIO", 0, GetDiskIO, 0, 0, 0, napi_default, 0 },
         { "getNetworkStats", 0, GetNetworkStats, 0, 0, 0, napi_default, 0 },
         { "getProcessList", 0, GetProcessList, 0, 0, 0, napi_default, 0 },
     };
