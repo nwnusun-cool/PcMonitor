@@ -29,6 +29,8 @@ const batteryInfo = ref({})
 const processInfo = ref({ topCpu: [], topMem: [], all: 0, running: 0, blocked: 0, sleeping: 0 })
 const uptime = ref('')
 const systemStats = ref({ processCount: 0, threadCount: 0, handleCount: 0 })
+const perCoreUsage = ref([])
+const memoryHardware = ref({ modules: [], usedSlots: 0, totalSlots: 0 })
 
 // 图表数据
 const cpuHistory = ref([])
@@ -132,6 +134,12 @@ async function loadData() {
       processInfo.value = proc
     })
     
+    // 内存硬件信息（缓存，只获取一次）
+    if (typeof window.services.getMemoryHardware === 'function') {
+      memoryHardware.value = window.services.getMemoryHardware()
+      console.log(`[${Date.now() - t0}ms] memoryHardware done`)
+    }
+    
   } catch (e) {
     console.error('加载数据失败:', e)
     loading.value = false
@@ -156,6 +164,11 @@ async function refreshDynamic() {
     memoryInfo.value = mem
     uptime.value = window.services.getUptime()
     systemStats.value = window.services.getSystemStats()
+    
+    // 每核心使用率
+    if (typeof window.services.getPerCoreUsage === 'function') {
+      perCoreUsage.value = window.services.getPerCoreUsage()
+    }
 
     cpuHistory.value.push(parseFloat(cpuLoad.load) || 0)
     memoryHistory.value.push(parseFloat(mem.usedPercent) || 0)
@@ -259,6 +272,7 @@ onUnmounted(() => {
           :cpuInfo="cpuInfo"
           :cpuHistory="cpuHistory"
           :systemStats="systemStats"
+          :perCoreUsage="perCoreUsage"
         />
 
         <MemoryPanel 
@@ -266,6 +280,7 @@ onUnmounted(() => {
           ref="memoryPanelRef"
           :memoryInfo="memoryInfo"
           :memoryHistory="memoryHistory"
+          :memoryHardware="memoryHardware"
         />
 
         <DiskPanel 

@@ -8,6 +8,8 @@
 #include <tlhelp32.h>
 #include <winioctl.h>
 #include <pdh.h>
+#include <comdef.h>
+#include <Wbemidl.h>
 #include <vector>
 #include <string>
 
@@ -15,6 +17,7 @@
 #pragma comment(lib, "iphlpapi.lib")
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "pdh.lib")
+#pragma comment(lib, "wbemuuid.lib")
 
 std::string WideToUtf8(const wchar_t* wstr) {
     if (!wstr) return "";
@@ -25,18 +28,19 @@ std::string WideToUtf8(const wchar_t* wstr) {
     return result;
 }
 
-// Memory Info
+// Memory Info (extended with GetPerformanceInfo)
 napi_value GetMemoryInfo(napi_env env, napi_callback_info info) {
     napi_value result;
     napi_create_object(env, &result);
+    napi_value v;
+    
     MEMORYSTATUSEX mem; mem.dwLength = sizeof(mem);
     if (GlobalMemoryStatusEx(&mem)) {
-        napi_value v;
         napi_create_double(env, (double)mem.ullTotalPhys, &v); napi_set_named_property(env, result, "total", v);
         napi_create_double(env, (double)mem.ullAvailPhys, &v); napi_set_named_property(env, result, "free", v);
         napi_create_double(env, (double)(mem.ullTotalPhys - mem.ullAvailPhys), &v); napi_set_named_property(env, result, "used", v);
         napi_create_double(env, (double)mem.dwMemoryLoad, &v); napi_set_named_property(env, result, "usedPercent", v);
-        // 交换空间 (PageFile - Physical = Swap)
+        // Swap (PageFile - Physical = Swap)
         double swapTotal = (double)(mem.ullTotalPageFile - mem.ullTotalPhys);
         double swapFree = (double)(mem.ullAvailPageFile - mem.ullAvailPhys);
         if (swapTotal < 0) swapTotal = 0;
@@ -45,6 +49,30 @@ napi_value GetMemoryInfo(napi_env env, napi_callback_info info) {
         napi_create_double(env, swapTotal - swapFree, &v); napi_set_named_property(env, result, "swapUsed", v);
         napi_create_double(env, swapFree, &v); napi_set_named_property(env, result, "swapFree", v);
     }
+    
+    // GetPerformanceInfo for detailed memory composition
+    PERFORMANCE_INFORMATION pi; pi.cb = sizeof(pi);
+    if (GetPerformanceInfo(&pi, sizeof(pi))) {
+        SIZE_T pageSize = pi.PageSize;
+        // Committed memory (total commit charge)
+        napi_create_double(env, (double)(pi.CommitTotal * pageSize), &v); 
+        napi_set_named_property(env, result, "committed", v);
+        napi_create_double(env, (double)(pi.CommitLimit * pageSize), &v); 
+        napi_set_named_property(env, result, "commitLimit", v);
+        // Cache (system cache)
+        napi_create_double(env, (double)(pi.SystemCache * pageSize), &v); 
+        napi_set_named_property(env, result, "cached", v);
+        // Paged pool
+        napi_create_double(env, (double)(pi.KernelPaged * pageSize), &v); 
+        napi_set_named_property(env, result, "pagedPool", v);
+        // Non-paged pool
+        napi_create_double(env, (double)(pi.KernelNonpaged * pageSize), &v); 
+        napi_set_named_property(env, result, "nonPagedPool", v);
+        // Page size
+        napi_create_double(env, (double)pageSize, &v); 
+        napi_set_named_property(env, result, "pageSize", v);
+    }
+    
     return result;
 }
 
@@ -53,6 +81,12 @@ static PDH_HQUERY cpuQuery = NULL;
 static PDH_HCOUNTER cpuCounter = NULL;
 static bool cpuInit = false;
 static double lastCpuLoad = 0;
+
+// Per-Core CPU Usage
+static PDH_HQUERY perCoreQuery = NULL;
+static std::vector<PDH_HCOUNTER> perCoreCounters;
+static bool perCoreInit = false;
+static std::vector<double> lastPerCoreLoad;
 
 napi_value GetCpuUsage(napi_env env, napi_callback_info info) {
     napi_value result; napi_create_object(env, &result);
@@ -85,6 +119,58 @@ napi_value GetCpuUsage(napi_env env, napi_callback_info info) {
     
     napi_value v;
     napi_create_double(env, load, &v); napi_set_named_property(env, result, "load", v);
+    return result;
+}
+
+// Per-Core CPU Usage
+napi_value GetPerCoreUsage(napi_env env, napi_callback_info info) {
+    napi_value result; napi_create_array(env, &result);
+    
+    SYSTEM_INFO si; GetNativeSystemInfo(&si);
+    int numCores = si.dwNumberOfProcessors;
+    
+    if (!perCoreInit) {
+        if (PdhOpenQuery(NULL, 0, &perCoreQuery) == ERROR_SUCCESS) {
+            perCoreCounters.resize(numCores);
+            lastPerCoreLoad.resize(numCores, 0);
+            
+            for (int i = 0; i < numCores; i++) {
+                wchar_t path[256];
+                // Try Processor Information first (modern, matches Task Manager)
+                swprintf(path, 256, L"\\Processor Information(0,%d)\\%% Processor Utility", i);
+                if (PdhAddEnglishCounterW(perCoreQuery, path, 0, &perCoreCounters[i]) != ERROR_SUCCESS) {
+                    // Fallback to old Processor counter
+                    swprintf(path, 256, L"\\Processor(%d)\\%% Processor Time", i);
+                    PdhAddEnglishCounterW(perCoreQuery, path, 0, &perCoreCounters[i]);
+                }
+            }
+            PdhCollectQueryData(perCoreQuery); // First call to initialize
+        }
+        perCoreInit = true;
+    }
+    
+    if (perCoreQuery) {
+        if (PdhCollectQueryData(perCoreQuery) == ERROR_SUCCESS) {
+            for (int i = 0; i < numCores; i++) {
+                if (perCoreCounters[i]) {
+                    PDH_FMT_COUNTERVALUE value;
+                    if (PdhGetFormattedCounterValue(perCoreCounters[i], PDH_FMT_DOUBLE, NULL, &value) == ERROR_SUCCESS) {
+                        double load = value.doubleValue;
+                        if (load < 0) load = 0;
+                        if (load > 100) load = 100;
+                        lastPerCoreLoad[i] = load;
+                    }
+                }
+            }
+        }
+    }
+    
+    for (int i = 0; i < numCores; i++) {
+        napi_value v;
+        napi_create_double(env, lastPerCoreLoad[i], &v);
+        napi_set_element(env, result, i, v);
+    }
+    
     return result;
 }
 
@@ -468,39 +554,92 @@ napi_value GetDiskIO(napi_env env, napi_callback_info info) {
     napi_value result; napi_create_object(env, &result);
     napi_value v;
     
-    // Use PDH to get disk IO (same as Task Manager)
+    // Use PDH to get disk IO and performance metrics
     static PDH_HQUERY diskQuery = NULL;
     static PDH_HCOUNTER readCounter = NULL, writeCounter = NULL;
+    static PDH_HCOUNTER diskTimeCounter = NULL, queueLengthCounter = NULL;
+    static PDH_HCOUNTER avgReadTimeCounter = NULL, avgWriteTimeCounter = NULL;
+    static PDH_HCOUNTER readsPerSecCounter = NULL, writesPerSecCounter = NULL;
     static bool diskIoInit = false;
     
     if (!diskIoInit) {
         if (PdhOpenQuery(NULL, 0, &diskQuery) == ERROR_SUCCESS) {
+            // IO throughput
             PdhAddEnglishCounterW(diskQuery, L"\\PhysicalDisk(_Total)\\Disk Read Bytes/sec", 0, &readCounter);
             PdhAddEnglishCounterW(diskQuery, L"\\PhysicalDisk(_Total)\\Disk Write Bytes/sec", 0, &writeCounter);
+            // Performance metrics
+            PdhAddEnglishCounterW(diskQuery, L"\\PhysicalDisk(_Total)\\% Disk Time", 0, &diskTimeCounter);
+            PdhAddEnglishCounterW(diskQuery, L"\\PhysicalDisk(_Total)\\Current Disk Queue Length", 0, &queueLengthCounter);
+            PdhAddEnglishCounterW(diskQuery, L"\\PhysicalDisk(_Total)\\Avg. Disk sec/Read", 0, &avgReadTimeCounter);
+            PdhAddEnglishCounterW(diskQuery, L"\\PhysicalDisk(_Total)\\Avg. Disk sec/Write", 0, &avgWriteTimeCounter);
+            PdhAddEnglishCounterW(diskQuery, L"\\PhysicalDisk(_Total)\\Disk Reads/sec", 0, &readsPerSecCounter);
+            PdhAddEnglishCounterW(diskQuery, L"\\PhysicalDisk(_Total)\\Disk Writes/sec", 0, &writesPerSecCounter);
             PdhCollectQueryData(diskQuery);
         }
         diskIoInit = true;
     }
     
     double readSec = 0, writeSec = 0;
+    double diskTime = 0, queueLength = 0;
+    double avgReadTime = 0, avgWriteTime = 0;
+    double readsPerSec = 0, writesPerSec = 0;
     
     if (diskQuery) {
         if (PdhCollectQueryData(diskQuery) == ERROR_SUCCESS) {
             PDH_FMT_COUNTERVALUE value;
+            
+            // IO throughput
             if (readCounter && PdhGetFormattedCounterValue(readCounter, PDH_FMT_DOUBLE, NULL, &value) == ERROR_SUCCESS) {
                 readSec = value.doubleValue;
             }
             if (writeCounter && PdhGetFormattedCounterValue(writeCounter, PDH_FMT_DOUBLE, NULL, &value) == ERROR_SUCCESS) {
                 writeSec = value.doubleValue;
             }
+            
+            // Performance metrics
+            if (diskTimeCounter && PdhGetFormattedCounterValue(diskTimeCounter, PDH_FMT_DOUBLE, NULL, &value) == ERROR_SUCCESS) {
+                diskTime = value.doubleValue;
+            }
+            if (queueLengthCounter && PdhGetFormattedCounterValue(queueLengthCounter, PDH_FMT_DOUBLE, NULL, &value) == ERROR_SUCCESS) {
+                queueLength = value.doubleValue;
+            }
+            if (avgReadTimeCounter && PdhGetFormattedCounterValue(avgReadTimeCounter, PDH_FMT_DOUBLE, NULL, &value) == ERROR_SUCCESS) {
+                avgReadTime = value.doubleValue * 1000; // Convert to ms
+            }
+            if (avgWriteTimeCounter && PdhGetFormattedCounterValue(avgWriteTimeCounter, PDH_FMT_DOUBLE, NULL, &value) == ERROR_SUCCESS) {
+                avgWriteTime = value.doubleValue * 1000; // Convert to ms
+            }
+            if (readsPerSecCounter && PdhGetFormattedCounterValue(readsPerSecCounter, PDH_FMT_DOUBLE, NULL, &value) == ERROR_SUCCESS) {
+                readsPerSec = value.doubleValue;
+            }
+            if (writesPerSecCounter && PdhGetFormattedCounterValue(writesPerSecCounter, PDH_FMT_DOUBLE, NULL, &value) == ERROR_SUCCESS) {
+                writesPerSec = value.doubleValue;
+            }
         }
     }
     
+    // Clamp values
     if (readSec < 0) readSec = 0;
     if (writeSec < 0) writeSec = 0;
+    if (diskTime < 0) diskTime = 0;
+    if (diskTime > 100) diskTime = 100;
+    if (queueLength < 0) queueLength = 0;
+    if (avgReadTime < 0) avgReadTime = 0;
+    if (avgWriteTime < 0) avgWriteTime = 0;
+    if (readsPerSec < 0) readsPerSec = 0;
+    if (writesPerSec < 0) writesPerSec = 0;
     
+    // IO throughput
     napi_create_double(env, readSec, &v); napi_set_named_property(env, result, "readSec", v);
     napi_create_double(env, writeSec, &v); napi_set_named_property(env, result, "writeSec", v);
+    // Performance metrics
+    napi_create_double(env, diskTime, &v); napi_set_named_property(env, result, "activeTime", v);
+    napi_create_double(env, queueLength, &v); napi_set_named_property(env, result, "queueLength", v);
+    napi_create_double(env, avgReadTime, &v); napi_set_named_property(env, result, "avgReadTime", v);
+    napi_create_double(env, avgWriteTime, &v); napi_set_named_property(env, result, "avgWriteTime", v);
+    napi_create_double(env, readsPerSec, &v); napi_set_named_property(env, result, "readsPerSec", v);
+    napi_create_double(env, writesPerSec, &v); napi_set_named_property(env, result, "writesPerSec", v);
+    
     return result;
 }
 
@@ -677,11 +816,163 @@ napi_value GetProcessList(napi_env env, napi_callback_info info) {
     return result;
 }
 
+// Memory Hardware Info via WMI
+napi_value GetMemoryHardware(napi_env env, napi_callback_info info) {
+    napi_value result, modules;
+    napi_create_object(env, &result);
+    napi_create_array(env, &modules);
+    
+    HRESULT hr = CoInitializeEx(0, COINIT_MULTITHREADED);
+    bool needUninit = SUCCEEDED(hr);
+    
+    IWbemLocator* pLoc = NULL;
+    IWbemServices* pSvc = NULL;
+    IEnumWbemClassObject* pEnum = NULL;
+    
+    do {
+        hr = CoCreateInstance(CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER, IID_IWbemLocator, (LPVOID*)&pLoc);
+        if (FAILED(hr)) break;
+        
+        hr = pLoc->ConnectServer(_bstr_t(L"ROOT\\CIMV2"), NULL, NULL, 0, NULL, 0, 0, &pSvc);
+        if (FAILED(hr)) break;
+        
+        hr = CoSetProxyBlanket(pSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE, NULL,
+            RPC_C_AUTHN_LEVEL_CALL, RPC_C_IMP_LEVEL_IMPERSONATE, NULL, EOAC_NONE);
+        if (FAILED(hr)) break;
+        
+        // Query physical memory
+        hr = pSvc->ExecQuery(_bstr_t(L"WQL"), 
+            _bstr_t(L"SELECT BankLabel, Capacity, Speed, SMBIOSMemoryType, FormFactor, Manufacturer, PartNumber FROM Win32_PhysicalMemory"),
+            WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, NULL, &pEnum);
+        if (FAILED(hr)) break;
+        
+        IWbemClassObject* pObj = NULL;
+        ULONG uReturn = 0;
+        uint32_t idx = 0;
+        
+        while (pEnum->Next(WBEM_INFINITE, 1, &pObj, &uReturn) == S_OK && uReturn > 0) {
+            napi_value mod;
+            napi_create_object(env, &mod);
+            napi_value v;
+            VARIANT vtProp;
+            
+            // BankLabel
+            if (SUCCEEDED(pObj->Get(L"BankLabel", 0, &vtProp, 0, 0)) && vtProp.vt == VT_BSTR) {
+                napi_create_string_utf8(env, WideToUtf8(vtProp.bstrVal).c_str(), NAPI_AUTO_LENGTH, &v);
+                napi_set_named_property(env, mod, "bank", v);
+                VariantClear(&vtProp);
+            }
+            
+            // Capacity
+            if (SUCCEEDED(pObj->Get(L"Capacity", 0, &vtProp, 0, 0))) {
+                ULONGLONG cap = 0;
+                if (vtProp.vt == VT_BSTR) cap = _wtoi64(vtProp.bstrVal);
+                else if (vtProp.vt == VT_I8 || vtProp.vt == VT_UI8) cap = vtProp.ullVal;
+                napi_create_double(env, (double)cap, &v);
+                napi_set_named_property(env, mod, "capacity", v);
+                VariantClear(&vtProp);
+            }
+            
+            // Speed
+            if (SUCCEEDED(pObj->Get(L"Speed", 0, &vtProp, 0, 0)) && (vtProp.vt == VT_I4 || vtProp.vt == VT_UI4)) {
+                napi_create_uint32(env, vtProp.uintVal, &v);
+                napi_set_named_property(env, mod, "speed", v);
+                VariantClear(&vtProp);
+            }
+            
+            // SMBIOSMemoryType (26=DDR4, 34=DDR5, 24=DDR3)
+            if (SUCCEEDED(pObj->Get(L"SMBIOSMemoryType", 0, &vtProp, 0, 0)) && (vtProp.vt == VT_I4 || vtProp.vt == VT_UI4)) {
+                const char* type = "Unknown";
+                switch (vtProp.uintVal) {
+                    case 24: type = "DDR3"; break;
+                    case 26: type = "DDR4"; break;
+                    case 34: type = "DDR5"; break;
+                }
+                napi_create_string_utf8(env, type, NAPI_AUTO_LENGTH, &v);
+                napi_set_named_property(env, mod, "type", v);
+                VariantClear(&vtProp);
+            }
+            
+            // FormFactor (8=DIMM, 12=SODIMM)
+            if (SUCCEEDED(pObj->Get(L"FormFactor", 0, &vtProp, 0, 0)) && (vtProp.vt == VT_I4 || vtProp.vt == VT_UI4)) {
+                const char* form = "Unknown";
+                switch (vtProp.uintVal) {
+                    case 8: form = "DIMM"; break;
+                    case 12: form = "SODIMM"; break;
+                }
+                napi_create_string_utf8(env, form, NAPI_AUTO_LENGTH, &v);
+                napi_set_named_property(env, mod, "formFactor", v);
+                VariantClear(&vtProp);
+            }
+            
+            // Manufacturer
+            if (SUCCEEDED(pObj->Get(L"Manufacturer", 0, &vtProp, 0, 0)) && vtProp.vt == VT_BSTR) {
+                std::string mfr = WideToUtf8(vtProp.bstrVal);
+                // Trim whitespace
+                size_t start = mfr.find_first_not_of(" \t");
+                size_t end = mfr.find_last_not_of(" \t");
+                if (start != std::string::npos) mfr = mfr.substr(start, end - start + 1);
+                napi_create_string_utf8(env, mfr.c_str(), NAPI_AUTO_LENGTH, &v);
+                napi_set_named_property(env, mod, "manufacturer", v);
+                VariantClear(&vtProp);
+            }
+            
+            // PartNumber
+            if (SUCCEEDED(pObj->Get(L"PartNumber", 0, &vtProp, 0, 0)) && vtProp.vt == VT_BSTR) {
+                std::string pn = WideToUtf8(vtProp.bstrVal);
+                size_t start = pn.find_first_not_of(" \t");
+                size_t end = pn.find_last_not_of(" \t");
+                if (start != std::string::npos) pn = pn.substr(start, end - start + 1);
+                napi_create_string_utf8(env, pn.c_str(), NAPI_AUTO_LENGTH, &v);
+                napi_set_named_property(env, mod, "partNumber", v);
+                VariantClear(&vtProp);
+            }
+            
+            napi_set_element(env, modules, idx++, mod);
+            pObj->Release();
+        }
+        
+        // Get total slots from Win32_PhysicalMemoryArray
+        IEnumWbemClassObject* pEnum2 = NULL;
+        hr = pSvc->ExecQuery(_bstr_t(L"WQL"), 
+            _bstr_t(L"SELECT MemoryDevices FROM Win32_PhysicalMemoryArray"),
+            WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, NULL, &pEnum2);
+        if (SUCCEEDED(hr)) {
+            if (pEnum2->Next(WBEM_INFINITE, 1, &pObj, &uReturn) == S_OK && uReturn > 0) {
+                VARIANT vtProp;
+                if (SUCCEEDED(pObj->Get(L"MemoryDevices", 0, &vtProp, 0, 0)) && (vtProp.vt == VT_I4 || vtProp.vt == VT_UI4)) {
+                    napi_value v;
+                    napi_create_uint32(env, vtProp.uintVal, &v);
+                    napi_set_named_property(env, result, "totalSlots", v);
+                    VariantClear(&vtProp);
+                }
+                pObj->Release();
+            }
+            pEnum2->Release();
+        }
+        
+        napi_value v;
+        napi_create_uint32(env, idx, &v);
+        napi_set_named_property(env, result, "usedSlots", v);
+        
+    } while (0);
+    
+    if (pEnum) pEnum->Release();
+    if (pSvc) pSvc->Release();
+    if (pLoc) pLoc->Release();
+    if (needUninit) CoUninitialize();
+    
+    napi_set_named_property(env, result, "modules", modules);
+    return result;
+}
+
 // Module Init
 napi_value Init(napi_env env, napi_value exports) {
     napi_property_descriptor props[] = {
         { "getMemoryInfo", 0, GetMemoryInfo, 0, 0, 0, napi_default, 0 },
+        { "getMemoryHardware", 0, GetMemoryHardware, 0, 0, 0, napi_default, 0 },
         { "getCpuUsage", 0, GetCpuUsage, 0, 0, 0, napi_default, 0 },
+        { "getPerCoreUsage", 0, GetPerCoreUsage, 0, 0, 0, napi_default, 0 },
         { "getUptime", 0, GetUptime, 0, 0, 0, napi_default, 0 },
         { "getSystemStats", 0, GetSystemStats, 0, 0, 0, napi_default, 0 },
         { "getSystemInfo", 0, GetSystemInfo, 0, 0, 0, napi_default, 0 },

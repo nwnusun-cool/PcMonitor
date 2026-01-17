@@ -5,7 +5,8 @@ import { setupCanvas, drawChartWithHighlight, getDataIndexAtPosition } from '../
 const props = defineProps({
   cpuInfo: Object,
   cpuHistory: Array,
-  systemStats: Object
+  systemStats: Object,
+  perCoreUsage: Array
 })
 
 const canvasRef = ref(null)
@@ -46,6 +47,12 @@ function handleMouseLeave() {
   redraw()
 }
 
+function getCoreColor(load) {
+  if (load >= 80) return '#ea4335'
+  if (load >= 50) return '#fbbc04'
+  return '#34a853'
+}
+
 onMounted(() => {
   if (canvasRef.value) {
     setupCanvas(canvasRef.value)
@@ -82,7 +89,7 @@ defineExpose({ redraw, canvasRef })
       </div>
     </div>
 
-    <!-- 处理器 + 系统统计 -->
+    <!-- 处理器 + 每核心使用率 -->
     <div class="two-col">
       <div class="col-section">
         <h3>处理器</h3>
@@ -118,43 +125,42 @@ defineExpose({ redraw, canvasRef })
         </div>
       </div>
       <div class="col-section">
-        <h3>系统统计</h3>
-        <div class="stats-grid">
-          <div class="stat-item">
-            <span class="stat-value" v-if="systemStats?.processCount">{{ systemStats.processCount }}</span>
-            <span class="skeleton-text" v-else></span>
-            <span class="stat-label">进程</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value" v-if="systemStats?.threadCount">{{ systemStats.threadCount.toLocaleString() }}</span>
-            <span class="skeleton-text" v-else></span>
-            <span class="stat-label">线程</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value" v-if="systemStats?.handleCount">{{ systemStats.handleCount.toLocaleString() }}</span>
-            <span class="skeleton-text" v-else></span>
-            <span class="stat-label">句柄</span>
+        <h3>每核心使用率</h3>
+        <div class="core-grid" v-if="perCoreUsage?.length">
+          <div 
+            v-for="core in perCoreUsage" 
+            :key="core.core" 
+            class="core-item"
+            :title="`核心 ${core.core}: ${core.load}`"
+          >
+            <div class="core-bar" :style="{ height: core.loadRaw + '%', background: getCoreColor(core.loadRaw) }"></div>
+            <span class="core-label">{{ core.core }}</span>
           </div>
         </div>
-        <!-- 缓存 -->
-        <h3 v-if="cpuInfo.cache?.l2 || cpuInfo.cache?.l3">缓存</h3>
-        <div class="cache-grid" v-if="cpuInfo.cache?.l2 || cpuInfo.cache?.l3">
-          <div class="cache-item" v-if="cpuInfo.cache?.l1d">
-            <span class="cache-label">L1d</span>
-            <span class="cache-value">{{ cpuInfo.cache.l1d }}</span>
-          </div>
-          <div class="cache-item" v-if="cpuInfo.cache?.l1i">
-            <span class="cache-label">L1i</span>
-            <span class="cache-value">{{ cpuInfo.cache.l1i }}</span>
-          </div>
-          <div class="cache-item" v-if="cpuInfo.cache?.l2">
-            <span class="cache-label">L2</span>
-            <span class="cache-value">{{ cpuInfo.cache.l2 }}</span>
-          </div>
-          <div class="cache-item" v-if="cpuInfo.cache?.l3">
-            <span class="cache-label">L3</span>
-            <span class="cache-value">{{ cpuInfo.cache.l3 }}</span>
-          </div>
+        <div class="core-grid-skeleton" v-else>
+          <div v-for="i in 16" :key="i" class="core-item-skeleton"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 系统统计 -->
+    <div class="stats-section">
+      <h3>系统统计</h3>
+      <div class="stats-row">
+        <div class="stat-item">
+          <span class="stat-value" v-if="systemStats?.processCount">{{ systemStats.processCount }}</span>
+          <span class="skeleton-text" v-else></span>
+          <span class="stat-label">进程</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value" v-if="systemStats?.threadCount">{{ systemStats.threadCount.toLocaleString() }}</span>
+          <span class="skeleton-text" v-else></span>
+          <span class="stat-label">线程</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value" v-if="systemStats?.handleCount">{{ systemStats.handleCount.toLocaleString() }}</span>
+          <span class="skeleton-text" v-else></span>
+          <span class="stat-label">句柄</span>
         </div>
       </div>
     </div>
@@ -186,6 +192,7 @@ defineExpose({ redraw, canvasRef })
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+  margin-bottom: 10px;
 }
 .col-section {
   background: #fff;
@@ -238,12 +245,68 @@ defineExpose({ redraw, canvasRef })
 .spec-value { font-size: 12px; font-weight: 700; color: #333; margin-top: 2px; }
 .spec-value.highlight { color: #1a73e8; }
 
-/* 统计网格 */
-.stats-grid {
+/* 每核心使用率 */
+.core-grid {
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  gap: 3px;
+  height: 80px;
+  align-items: end;
+  padding: 8px;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+.core-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  position: relative;
+}
+.core-bar {
+  width: 100%;
+  min-height: 2px;
+  border-radius: 2px 2px 0 0;
+  transition: height 0.3s ease, background 0.3s ease;
+  position: absolute;
+  bottom: 14px;
+}
+.core-label {
+  font-size: 8px;
+  color: #888;
+  position: absolute;
+  bottom: 0;
+}
+.core-grid-skeleton {
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  gap: 3px;
+  height: 80px;
+  padding: 8px;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+.core-item-skeleton {
+  background: linear-gradient(90deg, #e8e8e8 25%, #f0f0f0 50%, #e8e8e8 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 2px;
+  height: 30%;
+  align-self: end;
+}
+
+/* 系统统计 */
+.stats-section {
+  background: #fff;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+.stats-section h3 { margin: 0 0 8px !important; }
+.stats-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: 10px;
 }
 .stat-item {
   display: flex;
@@ -255,23 +318,6 @@ defineExpose({ redraw, canvasRef })
 }
 .stat-value { font-size: 16px; font-weight: 700; color: #1a73e8; line-height: 1; }
 .stat-label { font-size: 9px; color: #888; font-weight: 600; text-transform: uppercase; margin-top: 4px; }
-
-/* 缓存网格 */
-.cache-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-}
-.cache-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 6px 4px;
-  background: #f8f9fa;
-  border-radius: 6px;
-}
-.cache-label { font-size: 9px; color: #888; font-weight: 600; }
-.cache-value { font-size: 11px; font-weight: 700; color: #9334e6; margin-top: 2px; }
 
 /* 骨架屏 */
 .skeleton-text {

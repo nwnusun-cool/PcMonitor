@@ -29,7 +29,43 @@ module.exports = {
       swapTotal: formatBytes(m.swapTotal || 0),
       swapUsed: formatBytes(m.swapUsed || 0),
       swapFree: formatBytes(m.swapFree || 0),
-      totalRaw: m.total, usedRaw: m.used, freeRaw: m.free
+      totalRaw: m.total, usedRaw: m.used, freeRaw: m.free,
+      // Extended info from GetPerformanceInfo
+      committed: formatBytes(m.committed || 0),
+      commitLimit: formatBytes(m.commitLimit || 0),
+      cached: formatBytes(m.cached || 0),
+      pagedPool: formatBytes(m.pagedPool || 0),
+      nonPagedPool: formatBytes(m.nonPagedPool || 0),
+      committedRaw: m.committed || 0,
+      cachedRaw: m.cached || 0,
+      pagedPoolRaw: m.pagedPool || 0,
+      nonPagedPoolRaw: m.nonPagedPool || 0
+    }
+  },
+
+  // Memory hardware info (via C++ WMI)
+  getMemoryHardware() {
+    if (!native) return { modules: [], usedSlots: 0, totalSlots: 0, totalCapacity: '0 B', speed: 0, type: 'Unknown' }
+    
+    const hw = native.getMemoryHardware()
+    const modules = (hw.modules || []).map(m => ({
+      bank: m.bank || '',
+      capacity: formatBytes(m.capacity || 0),
+      capacityRaw: m.capacity || 0,
+      speed: m.speed || 0,
+      type: m.type || 'Unknown',
+      formFactor: m.formFactor || 'Unknown',
+      manufacturer: m.manufacturer || '',
+      partNumber: m.partNumber || ''
+    }))
+    
+    return {
+      modules,
+      usedSlots: hw.usedSlots || modules.length,
+      totalSlots: hw.totalSlots || modules.length,
+      totalCapacity: formatBytes(modules.reduce((sum, m) => sum + m.capacityRaw, 0)),
+      speed: modules[0]?.speed || 0,
+      type: modules[0]?.type || 'Unknown'
     }
   },
 
@@ -37,6 +73,16 @@ module.exports = {
     if (!native) return null
     const c = native.getCpuUsage()
     return { load: c.load.toFixed(1) + '%', loadRaw: c.load }
+  },
+
+  getPerCoreUsage() {
+    if (!native) return null
+    const cores = native.getPerCoreUsage()
+    return cores.map((load, i) => ({
+      core: i,
+      load: load.toFixed(1) + '%',
+      loadRaw: load
+    }))
   },
 
   getUptime() {
@@ -129,13 +175,30 @@ module.exports = {
   },
 
   getDiskIO() {
-    if (!native) return { readSec: 0, writeSec: 0, readSecFmt: '0 B/s', writeSecFmt: '0 B/s' }
+    if (!native) return { 
+      readSec: 0, writeSec: 0, readSecFmt: '0 B/s', writeSecFmt: '0 B/s',
+      activeTime: 0, queueLength: 0, avgReadTime: 0, avgWriteTime: 0,
+      readsPerSec: 0, writesPerSec: 0
+    }
     const io = native.getDiskIO()
     return {
       readSec: io.readSec,
       writeSec: io.writeSec,
       readSecFmt: formatBytes(io.readSec) + '/s',
-      writeSecFmt: formatBytes(io.writeSec) + '/s'
+      writeSecFmt: formatBytes(io.writeSec) + '/s',
+      // Performance metrics
+      activeTime: io.activeTime || 0,
+      activeTimeFmt: (io.activeTime || 0).toFixed(1) + '%',
+      queueLength: io.queueLength || 0,
+      queueLengthFmt: (io.queueLength || 0).toFixed(2),
+      avgReadTime: io.avgReadTime || 0,
+      avgReadTimeFmt: (io.avgReadTime || 0).toFixed(1) + ' ms',
+      avgWriteTime: io.avgWriteTime || 0,
+      avgWriteTimeFmt: (io.avgWriteTime || 0).toFixed(1) + ' ms',
+      readsPerSec: io.readsPerSec || 0,
+      readsPerSecFmt: (io.readsPerSec || 0).toFixed(1),
+      writesPerSec: io.writesPerSec || 0,
+      writesPerSecFmt: (io.writesPerSec || 0).toFixed(1)
     }
   },
 

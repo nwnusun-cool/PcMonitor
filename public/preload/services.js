@@ -23,7 +23,7 @@ function formatBytes(bytes, decimals = 2) {
 }
 
 // 缓存
-const cache = { systemInfo: null, cpuStatic: null, gpuInfo: null }
+const cache = { systemInfo: null, cpuStatic: null, gpuInfo: null, memoryHardware: null }
 
 window.services = {
   // CPU 负载 (同步, <0.1ms)
@@ -33,12 +33,26 @@ window.services = {
     return { load: '0%', loadUser: '0%', loadSystem: '0%' }
   },
 
+  // 每核心 CPU 使用率
+  getPerCoreUsage() {
+    if (native) return native.getPerCoreUsage()
+    return []
+  },
+
   // 内存信息 (同步, <0.01ms)
   getMemoryInfo() {
     if (native) return native.getMemoryInfo()
     const total = os.totalmem(), free = os.freemem(), used = total - free
     return { total: formatBytes(total), used: formatBytes(used), free: formatBytes(free),
       available: formatBytes(free), usedPercent: ((used / total) * 100).toFixed(1) + '%' }
+  },
+
+  // 内存硬件信息 (缓存)
+  getMemoryHardware() {
+    if (!cache.memoryHardware && native) {
+      cache.memoryHardware = native.getMemoryHardware()
+    }
+    return cache.memoryHardware || { modules: [], usedSlots: 0, totalSlots: 0 }
   },
 
   // 运行时间 (同步, <0.001ms)

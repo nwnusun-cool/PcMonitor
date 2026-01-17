@@ -110,7 +110,7 @@ defineExpose({ redraw, canvasRef })
       </div>
     </div>
 
-    <!-- 存储 + 物理磁盘 -->
+    <!-- 存储 + 性能指标 -->
     <div class="two-col">
       <div class="col-section">
         <h3>存储概览</h3>
@@ -138,18 +138,55 @@ defineExpose({ redraw, canvasRef })
         </div>
       </div>
       <div class="col-section">
-        <h3>物理磁盘</h3>
-        <div class="physical-list" v-if="diskInfo.physical?.length">
-          <div v-for="(disk, index) in diskInfo.physical" :key="index" class="physical-item">
-            <span class="physical-icon">💿</span>
-            <span class="physical-name">{{ disk.name }}</span>
-            <span class="physical-meta">{{ disk.type }}</span>
-            <span class="physical-size">{{ disk.size }}</span>
+        <h3>性能指标</h3>
+        <div class="perf-grid">
+          <div class="perf-item">
+            <span class="perf-label">活动时间</span>
+            <span class="perf-value" v-if="diskIO?.activeTimeFmt">{{ diskIO.activeTimeFmt }}</span>
+            <span class="skeleton-text" v-else></span>
+          </div>
+          <div class="perf-item">
+            <span class="perf-label">队列长度</span>
+            <span class="perf-value" v-if="diskIO?.queueLengthFmt">{{ diskIO.queueLengthFmt }}</span>
+            <span class="skeleton-text" v-else></span>
+          </div>
+          <div class="perf-item">
+            <span class="perf-label">读响应</span>
+            <span class="perf-value" v-if="diskIO?.avgReadTimeFmt">{{ diskIO.avgReadTimeFmt }}</span>
+            <span class="skeleton-text" v-else></span>
+          </div>
+          <div class="perf-item">
+            <span class="perf-label">写响应</span>
+            <span class="perf-value" v-if="diskIO?.avgWriteTimeFmt">{{ diskIO.avgWriteTimeFmt }}</span>
+            <span class="skeleton-text" v-else></span>
+          </div>
+          <div class="perf-item">
+            <span class="perf-label">读次数</span>
+            <span class="perf-value" v-if="diskIO?.readsPerSecFmt">{{ diskIO.readsPerSecFmt }}/s</span>
+            <span class="skeleton-text" v-else></span>
+          </div>
+          <div class="perf-item">
+            <span class="perf-label">写次数</span>
+            <span class="perf-value" v-if="diskIO?.writesPerSecFmt">{{ diskIO.writesPerSecFmt }}/s</span>
+            <span class="skeleton-text" v-else></span>
           </div>
         </div>
-        <div class="physical-list" v-else>
-          <div class="physical-item"><span class="skeleton-text long"></span></div>
+      </div>
+    </div>
+
+    <!-- 物理磁盘 -->
+    <div class="physical-section">
+      <h3>物理磁盘</h3>
+      <div class="physical-list" v-if="diskInfo.physical?.length">
+        <div v-for="(disk, index) in diskInfo.physical" :key="index" class="physical-item">
+          <span class="physical-icon">💿</span>
+          <span class="physical-name">{{ disk.name }}</span>
+          <span class="physical-meta">{{ disk.type }}</span>
+          <span class="physical-size">{{ disk.size }}</span>
         </div>
+      </div>
+      <div class="physical-list" v-else>
+        <div class="physical-item"><span class="skeleton-text long"></span></div>
       </div>
     </div>
 
@@ -243,6 +280,33 @@ defineExpose({ redraw, canvasRef })
 .storage-value.used { color: #ea4335; }
 .storage-value.available { color: #34a853; }
 .storage-value.percent { color: #9334e6; }
+
+/* 性能指标网格 */
+.perf-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.perf-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 4px;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+.perf-label { font-size: 9px; color: #888; font-weight: 600; text-transform: uppercase; }
+.perf-value { font-size: 11px; font-weight: 700; color: #1a73e8; margin-top: 2px; }
+
+/* 物理磁盘区块 */
+.physical-section {
+  background: #fff;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  margin-bottom: 10px;
+}
+.physical-section h3 { margin: 0 0 8px !important; }
 
 /* 物理磁盘 */
 .physical-list { display: flex; flex-direction: column; gap: 4px; }
