@@ -205,9 +205,29 @@ module.exports = {
   getNetworkStats() {
     if (!native) return null
     const n = native.getNetworkStats()
-    return (n.interfaces || []).map(i => ({ iface: i.iface, ifaceName: i.iface, ip4: i.ip4, mac: i.mac,
-      speed: i.speed ? i.speed + ' Mbps' : 'Unknown', rxBytes: formatBytes(i.rxBytes), txBytes: formatBytes(i.txBytes),
-      rxSec: formatBytes(i.rxSec) + '/s', txSec: formatBytes(i.txSec) + '/s', rxSecBytes: i.rxSec, txSecBytes: i.txSec }))
+    return (n.interfaces || []).map(i => ({
+      iface: i.iface,
+      ifaceName: i.iface,
+      type: i.type || 'wired',
+      ip4: i.ip4 || '',
+      ip6: i.ip6 || '',
+      subnet: i.subnet || '',
+      dns: i.dns || [],
+      dhcp: i.dhcp || false,
+      mac: i.mac || '',
+      speed: i.speed ? i.speed.toFixed(0) + ' Mbps' : 'Unknown',
+      speedRaw: i.speed || 0,
+      utilization: i.utilization || 0,
+      utilizationFmt: (i.utilization || 0).toFixed(1) + '%',
+      rxBytes: formatBytes(i.rxBytes || 0),
+      txBytes: formatBytes(i.txBytes || 0),
+      rxPackets: i.rxPackets || 0,
+      txPackets: i.txPackets || 0,
+      rxSec: formatBytes(i.rxSec || 0) + '/s',
+      txSec: formatBytes(i.txSec || 0) + '/s',
+      rxSecBytes: i.rxSec || 0,
+      txSecBytes: i.txSec || 0
+    }))
   },
 
   getProcessList() {
@@ -232,5 +252,49 @@ module.exports = {
     const topCpu = [...list].sort((a, b) => b.cpuRaw - a.cpuRaw).slice(0, 15)
     
     return { count: p.count, list, topMem, topCpu }
+  },
+
+  getNetworkConnections() {
+    if (!native) return { tcp: [], udp: [], byProcess: [] }
+    const data = native.getNetworkConnections()
+    
+    // Group by process for summary
+    const byProcess = {}
+    const allConns = [...data.tcp, ...data.udp]
+    
+    allConns.forEach(conn => {
+      const key = conn.pid
+      if (!byProcess[key]) {
+        byProcess[key] = {
+          pid: conn.pid,
+          process: conn.process || 'Unknown',
+          tcp: 0,
+          udp: 0,
+          established: 0,
+          listening: 0
+        }
+      }
+      
+      if (conn.protocol === 'TCP') {
+        byProcess[key].tcp++
+        if (conn.state === 'ESTABLISHED') byProcess[key].established++
+        if (conn.state === 'LISTENING') byProcess[key].listening++
+      } else {
+        byProcess[key].udp++
+      }
+    })
+    
+    const byProcessArray = Object.values(byProcess)
+      .sort((a, b) => (b.tcp + b.udp) - (a.tcp + a.udp))
+    
+    return {
+      tcp: data.tcp,
+      udp: data.udp,
+      byProcess: byProcessArray,
+      totalTcp: data.tcp.length,
+      totalUdp: data.udp.length,
+      totalEstablished: data.tcp.filter(c => c.state === 'ESTABLISHED').length,
+      totalListening: data.tcp.filter(c => c.state === 'LISTENING').length
+    }
   }
 }

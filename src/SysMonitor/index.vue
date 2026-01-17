@@ -24,6 +24,8 @@ const diskInfo = ref({
 })
 const diskIO = ref({ readSec: 0, writeSec: 0, readSecFmt: '0 B/s', writeSecFmt: '0 B/s' })
 const networkInfo = ref({ interfaces: [], stats: [] })
+const externalIP = ref({ ip: '', locationText: '', ispText: '' })
+const connections = ref({ tcp: [], udp: [], byProcess: [], totalTcp: 0, totalUdp: 0 })
 const gpuInfo = ref({ controllers: [], displays: [] })
 const batteryInfo = ref({})
 const processInfo = ref({ topCpu: [], topMem: [], all: 0, running: 0, blocked: 0, sleeping: 0 })
@@ -140,6 +142,16 @@ async function loadData() {
       console.log(`[${Date.now() - t0}ms] memoryHardware done`)
     }
     
+    // 外部 IP 信息（缓存 5 分钟，后台加载）
+    if (typeof window.services.getExternalIP === 'function') {
+      window.services.getExternalIP().then(ip => {
+        console.log(`[${Date.now() - t0}ms] externalIP done`)
+        externalIP.value = ip
+      }).catch(e => {
+        console.error('获取外部 IP 失败:', e)
+      })
+    }
+    
   } catch (e) {
     console.error('加载数据失败:', e)
     loading.value = false
@@ -186,6 +198,11 @@ async function refreshDynamic() {
         if (networkDownHistory.value.length > maxDataPoints) networkDownHistory.value.shift()
         if (networkUpHistory.value.length > maxDataPoints) networkUpHistory.value.shift()
       })
+      
+      // 网络连接（每秒刷新）
+      if (typeof window.services.getNetworkConnections === 'function') {
+        connections.value = window.services.getNetworkConnections()
+      }
     }
     
     // 进程：仅在进程 tab 时刷新（服务层已有 5 秒缓存）
@@ -297,6 +314,8 @@ onUnmounted(() => {
           :networkInfo="networkInfo"
           :networkDownHistory="networkDownHistory"
           :networkUpHistory="networkUpHistory"
+          :externalIP="externalIP"
+          :connections="connections"
         />
 
         <GpuPanel 

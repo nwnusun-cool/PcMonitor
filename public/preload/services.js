@@ -23,7 +23,14 @@ function formatBytes(bytes, decimals = 2) {
 }
 
 // 缓存
-const cache = { systemInfo: null, cpuStatic: null, gpuInfo: null, memoryHardware: null }
+const cache = { 
+  systemInfo: null, 
+  cpuStatic: null, 
+  gpuInfo: null, 
+  memoryHardware: null,
+  externalIP: null,
+  externalIPTime: 0
+}
 
 window.services = {
   // CPU 负载 (同步, <0.1ms)
@@ -147,5 +154,74 @@ window.services = {
       }
     }
     return { all: 0, list: [], topCpu: [], topMem: [] }
+  },
+
+  // 外部 IP 和地理位置 (缓存 5 分钟)
+  async getExternalIP() {
+    const now = Date.now()
+    const cacheTime = 5 * 60 * 1000 // 5 minutes
+    
+    if (cache.externalIP && (now - cache.externalIPTime) < cacheTime) {
+      return cache.externalIP
+    }
+
+    try {
+      const https = require('https')
+      const data = await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Timeout')), 5000)
+        https.get('https://ipinfo.io/json', { timeout: 5000 }, (res) => {
+          let body = ''
+          res.on('data', chunk => body += chunk)
+          res.on('end', () => {
+            clearTimeout(timeout)
+            try {
+              resolve(JSON.parse(body))
+            } catch (e) {
+              reject(e)
+            }
+          })
+        }).on('error', (e) => {
+          clearTimeout(timeout)
+          reject(e)
+        })
+      })
+
+      const result = {
+        ip: data.ip || '',
+        city: data.city || '',
+        region: data.region || '',
+        country: data.country || '',
+        location: data.loc || '', // "lat,lon"
+        isp: data.org || '',
+        timezone: data.timezone || '',
+        // Format display strings
+        locationText: [data.city, data.region, data.country].filter(Boolean).join(', '),
+        ispText: (data.org || '').replace(/^AS\d+\s+/, '') // Remove AS number prefix
+      }
+
+      cache.externalIP = result
+      cache.externalIPTime = now
+      return result
+    } catch (e) {
+      console.error('获取外部 IP 失败:', e.message)
+      return {
+        ip: '',
+        city: '',
+        region: '',
+        country: '',
+        location: '',
+        isp: '',
+        timezone: '',
+        locationText: '获取失败',
+        ispText: '',
+        error: e.message
+      }
+    }
+  },
+
+  // 网络连接监控
+  getNetworkConnections() {
+    if (native) return native.getNetworkConnections()
+    return { tcp: [], udp: [], byProcess: [], totalTcp: 0, totalUdp: 0, totalEstablished: 0, totalListening: 0 }
   }
 }

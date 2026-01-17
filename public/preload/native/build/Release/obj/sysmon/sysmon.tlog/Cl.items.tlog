@@ -1,2 +1,4 @@
 F:\私有仓库\qoder_project\PcMonitor\public\preload\native\src\sysmon.cpp;F:\私有仓库\qoder_project\PcMonitor\public\preload\native\build\Release\obj\sysmon\src\sysmon.obj
+F:\私有仓库\qoder_project\PcMonitor\public\preload\native\src\network.cpp;F:\私有仓库\qoder_project\PcMonitor\public\preload\native\build\Release\obj\sysmon\src\network.obj
+F:\私有仓库\qoder_project\PcMonitor\public\preload\native\src\connections.cpp;F:\私有仓库\qoder_project\PcMonitor\public\preload\native\build\Release\obj\sysmon\src\connections.obj
 F:\私有仓库\qoder_project\PcMonitor\public\preload\native\node_modules\node-gyp\src\win_delay_load_hook.cc;F:\私有仓库\qoder_project\PcMonitor\public\preload\native\build\Release\obj\sysmon\win_delay_load_hook.obj
