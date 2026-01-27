@@ -188,6 +188,13 @@ async function refreshDynamic() {
     if (cpuHistory.value.length > maxDataPoints) cpuHistory.value.shift()
     if (memoryHistory.value.length > maxDataPoints) memoryHistory.value.shift()
     
+    // 电池：每次刷新（状态可能随时变化）
+    if (currentTab === 'overview') {
+      window.services.getBatteryInfo().then(battery => {
+        batteryInfo.value = battery
+      })
+    }
+    
     // 网络：仅在相关 tab 时刷新
     if (currentTab === 'network' || currentTab === 'overview') {
       window.services.getNetworkInfo().then(net => {
@@ -281,6 +288,8 @@ onUnmounted(() => {
           :systemStats="systemStats"
           :gpuInfo="gpuInfo"
           :uptime="uptime"
+          :memoryHardware="memoryHardware"
+          :externalIP="externalIP"
         />
 
         <CpuPanel 

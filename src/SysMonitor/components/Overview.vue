@@ -9,52 +9,200 @@ const props = defineProps({
   processInfo: Object,
   systemStats: Object,
   gpuInfo: Object,
-  uptime: String
+  uptime: String,
+  memoryHardware: Object,
+  externalIP: Object
 })
+
+// 固定颜色配置 - 轻量化风格，仅用于强调色
+const cpuColor = {
+  bg: '#ffffff',
+  liquid: '#e8f4fd',
+  border: '#e5e7eb',
+  accent: '#3b82f6',
+  glow: 'rgba(59, 130, 246, 0.08)'
+}
+
+const memoryColor = {
+  bg: '#ffffff',
+  liquid: '#f5f3ff',
+  border: '#e5e7eb',
+  accent: '#8b5cf6',
+  glow: 'rgba(139, 92, 246, 0.08)'
+}
+
+const diskColor = {
+  bg: '#ffffff',
+  liquid: '#fef9f3',
+  border: '#e5e7eb',
+  accent: '#f59e0b',
+  glow: 'rgba(245, 158, 11, 0.08)'
+}
+
+const networkColor = {
+  bg: '#ffffff',
+  liquid: '#f0fdf4',
+  border: '#e5e7eb',
+  accent: '#10b981',
+  glow: 'rgba(16, 185, 129, 0.08)'
+}
 </script>
 
 <template>
   <div class="panel compact">
-    <!-- 核心指标卡片 - 4列 -->
+    <!-- 核心指标卡片 - 4列 液体填充效果 -->
     <div class="metrics-grid">
-      <div class="metric-card cpu">
-        <div class="metric-icon">⚡</div>
-        <div class="metric-content">
-          <div class="metric-label">CPU</div>
-          <div class="metric-value">
-            <span v-if="cpuInfo.load">{{ cpuInfo.load }}</span>
-            <span v-else class="skeleton-text"></span>
+      <!-- CPU 液体卡片 -->
+      <div class="metric-card-liquid">
+        <div class="liquid-container" :style="{ 
+          borderColor: cpuColor.border 
+        }">
+          <div 
+            class="liquid-wave" 
+            :style="{ 
+              height: cpuInfo.load || '0%',
+              background: cpuColor.liquid
+            }"
+          >
+            <svg viewBox="0 0 500 150" preserveAspectRatio="none" class="wave-svg">
+              <path :fill="cpuColor.liquid">
+                <animate 
+                  attributeName="d" 
+                  dur="3s" 
+                  repeatCount="indefinite"
+                  values="
+                    M0,75 C150,90 350,60 500,75 L500,150 L0,150 Z;
+                    M0,75 C150,60 350,90 500,75 L500,150 L0,150 Z;
+                    M0,75 C150,90 350,60 500,75 L500,150 L0,150 Z
+                  "
+                />
+              </path>
+            </svg>
           </div>
+          <div class="liquid-container-accent" :style="{ background: cpuColor.accent }"></div>
+          <div class="liquid-content">
+            <div class="liquid-icon" :style="{ color: cpuColor.accent }">⚡</div>
+            <div class="liquid-info">
+              <div class="liquid-label">CPU</div>
+              <div class="liquid-value" :style="{ color: cpuColor.accent }">
+                <span v-if="cpuInfo.load">{{ cpuInfo.load }}</span>
+                <span v-else class="skeleton-text"></span>
+              </div>
+            </div>
+          </div>
+          <div class="liquid-glow" :style="{ background: cpuColor.glow }"></div>
         </div>
       </div>
-      <div class="metric-card memory">
-        <div class="metric-icon">💾</div>
-        <div class="metric-content">
-          <div class="metric-label">内存</div>
-          <div class="metric-value">
-            <span v-if="memoryInfo.usedPercent">{{ memoryInfo.usedPercent }}</span>
-            <span v-else class="skeleton-text"></span>
+
+      <!-- 内存 液体卡片 -->
+      <div class="metric-card-liquid">
+        <div class="liquid-container" :style="{ 
+          borderColor: memoryColor.border 
+        }">
+          <div 
+            class="liquid-wave" 
+            :style="{ 
+              height: memoryInfo.usedPercent || '0%',
+              background: memoryColor.liquid
+            }"
+          >
+            <svg viewBox="0 0 500 150" preserveAspectRatio="none" class="wave-svg">
+              <path :fill="memoryColor.liquid">
+                <animate 
+                  attributeName="d" 
+                  dur="2.5s" 
+                  repeatCount="indefinite"
+                  values="
+                    M0,75 C150,85 350,65 500,75 L500,150 L0,150 Z;
+                    M0,75 C150,65 350,85 500,75 L500,150 L0,150 Z;
+                    M0,75 C150,85 350,65 500,75 L500,150 L0,150 Z
+                  "
+                />
+              </path>
+            </svg>
           </div>
+          <div class="liquid-container-accent" :style="{ background: memoryColor.accent }"></div>
+          <div class="liquid-content">
+            <div class="liquid-icon" :style="{ color: memoryColor.accent }">🎫</div>
+            <div class="liquid-info">
+              <div class="liquid-label">内存</div>
+              <div class="liquid-value" :style="{ color: memoryColor.accent }">
+                <span v-if="memoryInfo.usedPercent">{{ memoryInfo.usedPercent }}</span>
+                <span v-else class="skeleton-text"></span>
+              </div>
+            </div>
+          </div>
+          <div class="liquid-glow" :style="{ background: memoryColor.glow }"></div>
         </div>
       </div>
-      <div class="metric-card disk">
-        <div class="metric-icon">💿</div>
-        <div class="metric-content">
-          <div class="metric-label">磁盘</div>
-          <div class="metric-value">
-            <span v-if="diskInfo.totalPercent">{{ diskInfo.totalPercent }}</span>
-            <span v-else class="skeleton-text"></span>
+
+      <!-- 磁盘 液体卡片 -->
+      <div class="metric-card-liquid">
+        <div class="liquid-container" :style="{ 
+          borderColor: diskColor.border 
+        }">
+          <div 
+            class="liquid-wave" 
+            :style="{ 
+              height: diskInfo.totalPercent || '0%',
+              background: diskColor.liquid
+            }"
+          >
+            <svg viewBox="0 0 500 150" preserveAspectRatio="none" class="wave-svg">
+              <path :fill="diskColor.liquid">
+                <animate 
+                  attributeName="d" 
+                  dur="3.5s" 
+                  repeatCount="indefinite"
+                  values="
+                    M0,75 C150,95 350,55 500,75 L500,150 L0,150 Z;
+                    M0,75 C150,55 350,95 500,75 L500,150 L0,150 Z;
+                    M0,75 C150,95 350,55 500,75 L500,150 L0,150 Z
+                  "
+                />
+              </path>
+            </svg>
           </div>
+          <div class="liquid-container-accent" :style="{ background: diskColor.accent }"></div>
+          <div class="liquid-content">
+            <div class="liquid-icon" :style="{ color: diskColor.accent }">💾</div>
+            <div class="liquid-info">
+              <div class="liquid-label">磁盘</div>
+              <div class="liquid-value" :style="{ color: diskColor.accent }">
+                <span v-if="diskInfo.totalPercent">{{ diskInfo.totalPercent }}</span>
+                <span v-else class="skeleton-text"></span>
+              </div>
+            </div>
+          </div>
+          <div class="liquid-glow" :style="{ background: diskColor.glow }"></div>
         </div>
       </div>
-      <div class="metric-card network">
-        <div class="metric-icon">🌐</div>
-        <div class="metric-content">
-          <div class="metric-label">网络</div>
-          <div class="metric-value small">
-            <span v-if="networkInfo.stats?.[0]">↓{{ networkInfo.stats[0].rxSec }}</span>
-            <span v-else class="skeleton-text"></span>
+
+      <!-- 网络卡片（双向指示器）-->
+      <div class="metric-card-liquid">
+        <div class="liquid-container network-card" :style="{ 
+          borderColor: networkColor.border 
+        }">
+          <div class="liquid-container-accent" :style="{ background: networkColor.accent }"></div>
+          <div class="liquid-content">
+            <div class="liquid-icon" :style="{ color: networkColor.accent }">🌐</div>
+            <div class="liquid-info">
+              <div class="liquid-label">网络</div>
+              <div class="network-speeds">
+                <div class="speed-item down">
+                  <span class="speed-arrow">↓</span>
+                  <span v-if="networkInfo.stats?.[0]" class="speed-value">{{ networkInfo.stats[0].rxSec }}</span>
+                  <span v-else class="skeleton-text"></span>
+                </div>
+                <div class="speed-item up">
+                  <span class="speed-arrow">↑</span>
+                  <span v-if="networkInfo.stats?.[0]" class="speed-value">{{ networkInfo.stats[0].txSec }}</span>
+                  <span v-else class="skeleton-text"></span>
+                </div>
+              </div>
+            </div>
           </div>
+          <div class="liquid-glow" :style="{ background: networkColor.glow }"></div>
         </div>
       </div>
     </div>
@@ -120,17 +268,17 @@ const props = defineProps({
           </div>
           <div class="compact-item">
             <span class="label">已用</span>
-            <span class="value used" v-if="memoryInfo.used">{{ memoryInfo.used }}</span>
+            <span class="value" v-if="memoryInfo.used">{{ memoryInfo.used }}</span>
             <span class="skeleton-text" v-else></span>
           </div>
           <div class="compact-item">
             <span class="label">可用</span>
-            <span class="value available" v-if="memoryInfo.available">{{ memoryInfo.available }}</span>
+            <span class="value" v-if="memoryInfo.available">{{ memoryInfo.available }}</span>
             <span class="skeleton-text" v-else></span>
           </div>
           <div class="compact-item">
-            <span class="label">使用率</span>
-            <span class="value percent" v-if="memoryInfo.usedPercent">{{ memoryInfo.usedPercent }}</span>
+            <span class="label">类型</span>
+            <span class="value" v-if="memoryHardware?.type">{{ memoryHardware.type }} {{ memoryHardware.speed }}MHz</span>
             <span class="skeleton-text" v-else></span>
           </div>
         </div>
@@ -145,17 +293,17 @@ const props = defineProps({
           </div>
           <div class="compact-item">
             <span class="label">已用</span>
-            <span class="value used" v-if="diskInfo.totalUsed">{{ diskInfo.totalUsed }}</span>
+            <span class="value" v-if="diskInfo.totalUsed">{{ diskInfo.totalUsed }}</span>
             <span class="skeleton-text" v-else></span>
           </div>
           <div class="compact-item">
             <span class="label">可用</span>
-            <span class="value available" v-if="diskInfo.totalAvailable">{{ diskInfo.totalAvailable }}</span>
+            <span class="value" v-if="diskInfo.totalAvailable">{{ diskInfo.totalAvailable }}</span>
             <span class="skeleton-text" v-else></span>
           </div>
           <div class="compact-item">
-            <span class="label">使用率</span>
-            <span class="value percent" v-if="diskInfo.totalPercent">{{ diskInfo.totalPercent }}</span>
+            <span class="label">磁盘</span>
+            <span class="value" v-if="diskInfo.physical?.length">{{ diskInfo.physical.length }}个 {{ diskInfo.physical[0]?.type || '' }}</span>
             <span class="skeleton-text" v-else></span>
           </div>
         </div>
@@ -186,13 +334,30 @@ const props = defineProps({
       </div>
       <div class="col-section" v-if="batteryInfo.hasBattery">
         <h3>电池</h3>
-        <div class="battery-row">
-          <div class="battery-icon" :class="{ charging: batteryInfo.isCharging }">
-            <div class="battery-level" :style="{ width: batteryInfo.percent }"></div>
+        <div class="battery-grid">
+          <div class="battery-item full">
+            <span class="battery-label">
+              <span class="status-icon">{{ batteryInfo.isCharging ? '⚡' : '🔋' }}</span>
+              {{ batteryInfo.isCharging ? '充电中' : '使用电池' }}
+            </span>
+            <div class="battery-progress-wrapper">
+              <div class="battery-progress-bar" :class="{
+                low: parseFloat(batteryInfo.percent) < 20,
+                medium: parseFloat(batteryInfo.percent) >= 20 && parseFloat(batteryInfo.percent) < 50,
+                charging: batteryInfo.isCharging
+              }">
+                <div class="battery-progress-fill" :style="{ width: batteryInfo.percent }"></div>
+              </div>
+              <span class="battery-progress-text">{{ batteryInfo.percent }}</span>
+            </div>
           </div>
-          <div class="battery-text">
-            <span class="battery-percent">{{ batteryInfo.percent }}</span>
-            <span class="battery-state">{{ batteryInfo.isCharging ? '充电中' : '电池' }}</span>
+          <div class="battery-item" v-if="batteryInfo.timeRemaining && batteryInfo.timeRemaining !== 'Unknown'">
+            <span class="battery-label">{{ batteryInfo.isCharging ? '充满' : '剩余' }}</span>
+            <span class="battery-value">{{ batteryInfo.timeRemaining }}</span>
+          </div>
+          <div class="battery-item" v-if="batteryInfo.capacity">
+            <span class="battery-label">健康度</span>
+            <span class="battery-value">{{ batteryInfo.capacity }}</span>
           </div>
         </div>
       </div>
@@ -238,7 +403,16 @@ const props = defineProps({
           <span class="nic-icon">{{ networkInfo.interfaces[0].type === 'wireless' ? '📶' : '🔌' }}</span>
           <div class="nic-info">
             <div class="nic-name">{{ networkInfo.interfaces[0].ifaceName }}</div>
-            <div class="nic-ip">{{ networkInfo.interfaces[0].ip4 }}</div>
+            <div class="nic-ips-multi-line">
+              <div class="nic-ip-row">
+                <span class="ip-tag local-tag">内网</span>
+                <span class="ip-address local">{{ networkInfo.interfaces[0].ip4 }}</span>
+              </div>
+              <div class="nic-ip-row" v-if="externalIP?.ip">
+                <span class="ip-tag external-tag">外网</span>
+                <span class="ip-address external">{{ externalIP.ip }}</span>
+              </div>
+            </div>
           </div>
         </div>
         <div class="nic-row" v-else>
@@ -256,73 +430,188 @@ const props = defineProps({
 <style scoped>
 @import '../styles/common.css';
 
-.panel.compact { padding: 12px; }
-.panel.compact h3 { margin: 0 0 8px; font-size: 12px; }
-.panel.compact h3:not(:first-child) { margin-top: 12px; }
+.panel.compact { 
+  padding: 12px;
+}
+
+.panel.compact h3 { 
+  margin: 0 0 8px; 
+  font-size: 12px;
+  color: #666;
+  font-weight: 600;
+}
+
+.panel.compact h3:not(:first-child) { 
+  margin-top: 10px; 
+}
 
 /* 核心指标 - 4列 */
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
-.metric-card {
-  background: #fff;
-  padding: 10px;
+/* 液体填充卡片 - 轻量化风格 */
+.metric-card-liquid {
+  height: 60px;
+}
+
+.liquid-container {
+  width: 100%;
+  height: 100%;
   border-radius: 8px;
-  border: 1px solid #e0e0e0;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid;
+  transition: all 0.3s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
   display: flex;
   align-items: center;
-  gap: 8px;
-  position: relative;
-  overflow: hidden;
+  padding: 0 12px;
+  gap: 10px;
+  background: #fff;
 }
-.metric-card::before {
+
+.liquid-container::before {
   content: '';
   position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 3px;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 2;
 }
-.metric-card.cpu::before { background: #1a73e8; }
-.metric-card.memory::before { background: #34a853; }
-.metric-card.disk::before { background: #9334e6; }
-.metric-card.network::before { background: #ea4335; }
 
-.metric-icon {
-  font-size: 22px;
-  width: 36px;
-  height: 36px;
+.liquid-container-accent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 2;
+}
+
+.liquid-container:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.liquid-wave {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 0;
+  opacity: 1;
+}
+
+.wave-svg {
+  position: absolute;
+  top: -50px;
+  left: 0;
+  width: 100%;
+  height: 150px;
+  opacity: 0.4;
+}
+
+.liquid-content {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: center;
-  background: #f5f5f5;
-  border-radius: 8px;
-  flex-shrink: 0;
+  gap: 10px;
+  z-index: 3;
+  flex: 1;
 }
-.metric-content { flex: 1; min-width: 0; }
-.metric-label { font-size: 10px; color: #888; font-weight: 600; text-transform: uppercase; }
-.metric-value { font-size: 18px; font-weight: 700; line-height: 1.2; }
-.metric-value.small { font-size: 14px; }
-.metric-card.cpu .metric-value { color: #1a73e8; }
-.metric-card.memory .metric-value { color: #34a853; }
-.metric-card.disk .metric-value { color: #9334e6; }
-.metric-card.network .metric-value { color: #ea4335; }
+
+.liquid-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  filter: none;
+}
+
+.liquid-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.liquid-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  line-height: 1;
+}
+
+.liquid-value {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.liquid-glow {
+  display: none;
+}
+
+/* 网络卡片特殊样式 */
+.liquid-container.network-card {
+  background: linear-gradient(to bottom, #f0fdf4 0%, #ffffff 50%, #eff6ff 100%);
+}
+
+.network-speeds {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.speed-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.speed-arrow {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.speed-item.down .speed-arrow {
+  color: #10b981;
+}
+
+.speed-item.up .speed-arrow {
+  color: #3b82f6;
+}
+
+.speed-value {
+  font-size: 11px;
+  font-weight: 600;
+  color: #333;
+}
 
 /* 两列布局 */
 .two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 10px;
+  margin-bottom: 10px;
 }
+
 .col-section {
   background: #fff;
   padding: 10px;
   border-radius: 8px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid #e5e7eb;
 }
+
 .col-section h3 { margin: 0 0 8px !important; }
 
 /* 紧凑网格 */
@@ -331,19 +620,24 @@ const props = defineProps({
   grid-template-columns: 1fr 1fr;
   gap: 6px;
 }
+
 .compact-grid.four { grid-template-columns: repeat(4, 1fr); }
+
 .compact-item {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
+
 .compact-item.full { grid-column: span 2; }
+
 .compact-item .label {
   font-size: 9px;
   color: #888;
   text-transform: uppercase;
   font-weight: 600;
 }
+
 .compact-item .value {
   font-size: 12px;
   color: #333;
@@ -352,15 +646,18 @@ const props = defineProps({
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.compact-item .value.used { color: #ea4335; }
-.compact-item .value.available { color: #34a853; }
-.compact-item .value.percent { color: #1a73e8; }
+
+.compact-item .value.warning { 
+  color: #ef4444;
+  font-weight: 700;
+}
 
 /* 进程行 */
 .process-row {
   display: flex;
   gap: 8px;
 }
+
 .process-item {
   flex: 1;
   text-align: center;
@@ -368,14 +665,17 @@ const props = defineProps({
   background: #f8f9fa;
   border-radius: 6px;
 }
+
 .process-value {
   display: block;
   font-size: 20px;
   font-weight: 700;
-  color: #1a73e8;
+  color: #3b82f6;
   line-height: 1;
 }
-.process-value.running { color: #34a853; }
+
+.process-value.running { color: #10b981; }
+
 .process-label {
   font-size: 9px;
   color: #888;
@@ -383,57 +683,175 @@ const props = defineProps({
   font-weight: 600;
 }
 
-/* 电池 */
-.battery-row {
+/* 电池网格 */
+.battery-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.battery-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.battery-item.full {
+  /* 第一行：状态+进度条 */
+}
+
+.battery-label {
+  font-size: 9px;
+  color: #888;
+  text-transform: uppercase;
+  font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 4px;
 }
-.battery-icon {
-  width: 50px;
-  height: 24px;
-  border: 2px solid #666;
+
+.battery-label .status-icon {
+  font-size: 11px;
+}
+
+.battery-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.battery-progress-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.battery-progress-bar {
+  flex: 1;
+  height: 8px;
+  background: #e5e7eb;
   border-radius: 4px;
+  overflow: hidden;
   position: relative;
-  background: #f5f5f5;
 }
-.battery-icon::after {
+
+.battery-progress-fill {
+  height: 100%;
+  background: #10b981;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+/* 低电量：脉冲警告 */
+.battery-progress-bar.low .battery-progress-fill {
+  background: #ef4444;
+  animation: low-battery-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes low-battery-pulse {
+  0%, 100% { 
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  50% { 
+    opacity: 0.7;
+    box-shadow: 0 0 8px 2px rgba(239, 68, 68, 0.6);
+  }
+}
+
+/* 中等电量：静态橙色 */
+.battery-progress-bar.medium .battery-progress-fill {
+  background: #f59e0b;
+}
+
+/* 充电中：流动光效 */
+.battery-progress-bar.charging .battery-progress-fill {
+  background: linear-gradient(90deg, #8b5cf6, #a78bfa, #8b5cf6);
+  background-size: 200% 100%;
+  animation: charging-flow 3s linear infinite;
+}
+
+.battery-progress-bar.charging .battery-progress-fill::before {
   content: '';
   position: absolute;
-  right: -5px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 4px;
-  height: 10px;
-  background: #666;
-  border-radius: 0 2px 2px 0;
-}
-.battery-level {
+  top: 0;
+  left: -100%;
+  width: 100%;
   height: 100%;
-  background: #34a853;
-  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(167, 139, 250, 0.3) 40%,
+    rgba(196, 181, 253, 0.6) 50%,
+    rgba(167, 139, 250, 0.3) 60%,
+    transparent 100%
+  );
+  animation: charging-shine 2.5s ease-in-out infinite;
 }
-.battery-icon.charging .battery-level { background: #fbbc04; }
-.battery-text { display: flex; flex-direction: column; }
-.battery-percent { font-size: 16px; font-weight: 700; color: #34a853; line-height: 1; }
-.battery-icon.charging + .battery-text .battery-percent { color: #fbbc04; }
-.battery-state { font-size: 10px; color: #888; }
+
+@keyframes charging-flow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+@keyframes charging-shine {
+  0% { left: -100%; }
+  100% { left: 200%; }
+}
+
+/* 正常电量：微妙呼吸 */
+.battery-progress-bar:not(.low):not(.medium):not(.charging) .battery-progress-fill {
+  animation: normal-breathe 4s ease-in-out infinite;
+}
+
+@keyframes normal-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
+.battery-progress-text {
+  font-size: 11px;
+  font-weight: 700;
+  color: #333;
+  min-width: 35px;
+  text-align: right;
+}
 
 /* 网络行 */
 .network-row {
   display: flex;
   gap: 12px;
 }
+
 .net-item {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
-.net-label { font-size: 9px; color: #888; text-transform: uppercase; font-weight: 600; }
-.net-value { font-size: 14px; font-weight: 700; }
-.net-value.down { color: #34a853; }
-.net-value.up { color: #1a73e8; }
+
+.net-label { 
+  font-size: 9px; 
+  color: #888; 
+  text-transform: uppercase; 
+  font-weight: 600; 
+}
+
+.net-value { 
+  font-size: 14px; 
+  font-weight: 700; 
+}
+
+.net-value.down { color: #10b981; }
+.net-value.up { color: #3b82f6; }
 
 /* GPU 行 */
 .gpu-row {
@@ -441,6 +859,7 @@ const props = defineProps({
   align-items: center;
   gap: 10px;
 }
+
 .gpu-icon {
   font-size: 20px;
   width: 32px;
@@ -452,7 +871,9 @@ const props = defineProps({
   border-radius: 6px;
   flex-shrink: 0;
 }
+
 .gpu-info { flex: 1; min-width: 0; }
+
 .gpu-name {
   font-size: 12px;
   font-weight: 600;
@@ -461,7 +882,12 @@ const props = defineProps({
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.gpu-meta { font-size: 10px; color: #888; margin-top: 2px; }
+
+.gpu-meta { 
+  font-size: 10px; 
+  color: #888; 
+  margin-top: 2px; 
+}
 
 /* 网卡行 */
 .nic-row {
@@ -469,6 +895,7 @@ const props = defineProps({
   align-items: center;
   gap: 10px;
 }
+
 .nic-icon {
   font-size: 20px;
   width: 32px;
@@ -476,11 +903,19 @@ const props = defineProps({
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #e8f0fe;
+  background: #dbeafe;
   border-radius: 6px;
   flex-shrink: 0;
 }
-.nic-info { flex: 1; min-width: 0; }
+
+.nic-info { 
+  flex: 1; 
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .nic-name {
   font-size: 12px;
   font-weight: 600;
@@ -489,7 +924,87 @@ const props = defineProps({
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.nic-ip { font-size: 11px; color: #1a73e8; font-family: monospace; margin-top: 2px; }
+
+.nic-info { 
+  flex: 1; 
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nic-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nic-ips-multi-line {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nic-ip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ip-tag {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 5px;
+  border-radius: 3px;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.ip-address { 
+  font-size: 10px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.ip-tag {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 5px;
+  border-radius: 3px;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.ip-tag.local-tag {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.ip-tag.external-tag {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.ip-address { 
+  font-size: 10px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.ip-address.local {
+  color: #3b82f6;
+}
+
+.ip-address.external {
+  color: #10b981;
+}
 
 /* 骨架屏 */
 .skeleton-text {
@@ -501,8 +1016,11 @@ const props = defineProps({
   animation: shimmer 1.5s infinite;
   border-radius: 3px;
 }
+
 .skeleton-text.long { width: 100px; }
+
 .metric-value .skeleton-text { height: 18px; width: 40px; }
+.liquid-value .skeleton-text { height: 28px; width: 50px; }
 
 @keyframes shimmer {
   0% { background-position: -200% 0; }

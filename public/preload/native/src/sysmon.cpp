@@ -444,7 +444,10 @@ napi_value GetBatteryInfo(napi_env env, napi_callback_info info) {
         napi_get_boolean(env, sps.BatteryFlag != 128 && sps.BatteryFlag != 255, &v);
         napi_set_named_property(env, result, "hasBattery", v);
         napi_create_uint32(env, sps.BatteryLifePercent, &v); napi_set_named_property(env, result, "percent", v);
-        napi_get_boolean(env, sps.ACLineStatus == 1, &v); napi_set_named_property(env, result, "isCharging", v);
+        // 修复：正在充电 = AC在线 且 (电池标志显示充电中 或 电量未满)
+        bool isCharging = (sps.ACLineStatus == 1) && ((sps.BatteryFlag & 8) || (sps.BatteryLifePercent < 100));
+        napi_get_boolean(env, isCharging, &v); 
+        napi_set_named_property(env, result, "isCharging", v);
     } else {
         napi_get_boolean(env, false, &v); napi_set_named_property(env, result, "hasBattery", v);
     }
